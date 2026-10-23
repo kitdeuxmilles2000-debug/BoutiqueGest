@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Utilisateurs{% endblock %}
+{% block heading %}Utilisateurs{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>Comptes utilisateurs</h2>
+      <p class="sub">{{ users|length }} compte(s). Chaque personne doit utiliser son propre compte.</p>
+    </div>
+    {% if current_user.has_permission(P.USERS_MANAGE) %}
+    <a href="{{ url_for('admin.user_new') }}" class="btn">+ Nouvel utilisateur</a>
+    {% endif %}
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Utilisateur</th><th>Nom complet</th><th>Rôle</th><th>Statut</th>
+          <th>Dernière connexion</th><th>Échecs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><strong>{{ u.username }}</strong></td>
+          <td>{{ u.full_name }}</td>
+          <td>{% if u.role %}<span class="badge blue">{{ u.role.label }}</span>{% else %}<span class="badge gray">—</span>{% endif %}</td>
+          <td>
+            {% if u.active %}<span class="badge green">Actif</span>{% else %}<span class="badge red">Désactivé</span>{% endif %}
+            {% if u.is_locked() %}<span class="badge amber">Verrouillé</span>{% endif %}
+          </td>
+          <td>{{ u.last_login_at.strftime('%d/%m/%Y %H:%M') if u.last_login_at else '—' }}</td>
+          <td>{{ u.failed_login_count or 0 }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Aucun utilisateur.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

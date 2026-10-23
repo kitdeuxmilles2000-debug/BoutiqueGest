@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Non authentifié{% endblock %}
+{% block heading %}Accès refusé{% endblock %}
+
+{% block content %}
+<div class="error-wrap">
+  <div>
+    <p class="error-code">401</p>
+    <h2>Vous devez vous connecter</h2>
+    <p class="muted">Votre session est absente ou a expiré.</p>
+    <a href="{{ url_for('auth.login') }}" class="btn mt-16">Se connecter</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Nouveau crédit{% endblock %}
+{% block heading %}{{ type_label }}{% endblock %}
+
+{% block content %}
+<div class="card form-narrow">
+  <form method="post" id="creditForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="credit_type" value="{{ credit_type }}">
+
+    {% if credit_type == 'client' %}
+    <div class="field">
+      <label for="partner">Client</label>
+      <select id="partner" name="customer_id" required>
+        <option value="">—</option>
+        {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}{% if c.credit_limit %} (plafond {{ c.credit_limit | num }}){% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    {% else %}
+    <div class="field">
+      <label for="partner">Fournisseur</label>
+      <select id="partner" name="supplier_id" required>
+        <option value="">—</option>
+        {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div class="field"><label for="amount">Montant</label><input type="text" id="amount" name="amount" required></div>
+    <div class="field">
+      <label for="currency">Devise</label>
+      <select id="currency" name="currency">{% for cur in currencies %}<option value="{{ cur }}">{{ cur }}</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="due_date">Echeance globale (facultatif)</label><input type="date" id="due_date" name="due_date"></div>
+
+    <fieldset style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px">
+      <legend class="pill">Echeances (facultatif)</legend>
+      <div id="instRows"></div>
+      <button type="button" class="btn ghost sm" onclick="addRow()">+ Ajouter une echeance</button>
+    </fieldset>
+
+    <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" rows="2"></textarea></div>
+    <div class="row"><button class="btn" type="submit">Enregistrer</button><a href="{{ url_for('credits.index') }}" class="btn ghost">Annuler</a></div>
+  </form>
+</div>
+
+<script>
+function addRow() {
+  const wrap = document.getElementById('instRows');
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.style.marginBottom = '8px';
+  div.innerHTML = '<input type="date" name="inst_due" style="padding:8px;border:1px solid var(--line);border-radius:8px">'
+    + '<input type="text" name="inst_amount" placeholder="Montant" style="padding:8px;border:1px solid var(--line);border-radius:8px;width:140px">'
+    + '<button type="button" class="qbtn" onclick="this.parentNode.remove()">✕</button>';
+  wrap.appendChild(div);
+}
+</script>
+{% endblock %}

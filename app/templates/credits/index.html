@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Crédits & dettes{% endblock %}
+{% block heading %}Crédits &amp; dettes{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card kpi"><span class="label">Creances clients (encours)</span><span class="value good">{{ total_client | num }}</span><span class="foot">A recouvrer</span></div>
+  <div class="card kpi"><span class="label">Dettes fournisseurs (encours)</span><span class="value" style="color:var(--danger)">{{ total_fournisseur | num }}</span><span class="foot">A payer</span></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Crédits & dettes</h2>
+      <p class="sub">{{ credits|length }} ligne(s) affichée(s).</p>
+    </div>
+    <div class="toolbar">
+      {% if current_user.has_permission(P.CREDITS_MANAGE) %}
+      <a href="{{ url_for('credits.new_client') }}" class="btn sm">+ Créance client</a>
+      <a href="{{ url_for('credits.new_supplier') }}" class="btn ghost sm">+ Dette fournisseur</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="get" class="row" style="gap:8px">
+    <select name="type" class="input">
+      <option value="">Tous les types</option>
+      {% for code, label in type_labels.items() %}<option value="{{ code }}" {{ 'selected' if credit_type == code }}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="status" class="input">
+      <option value="">Tous les statuts</option>
+      {% for code, label in status_labels.items() %}<option value="{{ code }}" {{ 'selected' if status == code }}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn sm" type="submit">Filtrer</button>
+    <a href="{{ url_for('credits.index') }}" class="btn ghost sm">Effacer</a>
+  </form>
+
+  <div class="table-wrap mt-16">
+    <table class="table">
+      <thead><tr><th>Type</th><th>Partenaire</th><th class="num">Initial</th><th class="num">Reste dû</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {% for c in credits %}
+        <tr>
+          <td><span class="badge {{ 'blue' if c.is_client else 'amber' }}">{{ 'Client' if c.is_client else 'Fournisseur' }}</span></td>
+          <td>{{ c.partner_name }}</td>
+          <td>{{ c.amount_initial | num }} {{ c.currency }}</td>
+          <td>{{ c.amount_remaining | num }} {{ c.currency }}</td>
+          <td>{{ c.due_date.strftime('%d/%m/%Y') if c.due_date else '—' }}</td>
+          <td>
+            {% if c.status == 'solde' %}<span class="badge green">Solde</span>
+            {% elif c.status == 'en_retard' %}<span class="badge red">En retard</span>
+            {% elif c.status == 'partiel' %}<span class="badge amber">Partiel</span>
+            {% else %}<span class="badge gray">Actif</span>{% endif %}
+          </td>
+          <td><a class="btn ghost sm" href="{{ url_for('credits.detail', credit_id=c.id) }}">Ouvrir</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">Aucun credit.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

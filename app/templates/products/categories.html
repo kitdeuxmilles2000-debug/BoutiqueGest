@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Catégories{% endblock %}
+{% block heading %}Catégories{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Catégories</h2>
+    <p class="sub">{{ categories|length }} catégorie(s).</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Nom</th><th>Produits</th></tr></thead>
+        <tbody>
+          {% for c in categories %}
+          <tr><td>{{ c.name }}<br><span class="pill">{{ c.description or '' }}</span></td><td>{{ c.products|length }}</td></tr>
+          {% else %}
+          <tr><td colspan="2" class="muted">Aucune catégorie.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
+  <div class="card">
+    <h2>Nouvelle catégorie</h2>
+    <p class="sub">Ex. Boisson, Eau, Lait, Accessoire.</p>
+    <form method="post" action="{{ url_for('products.categories') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="name">Nom</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+      <div class="field">
+        <label for="description">Description (facultatif)</label>
+        <input type="text" id="description" name="description">
+      </div>
+      <button class="btn" type="submit">Créer</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

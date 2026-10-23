@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Vente {{ sale.numero }}{% endblock %}
+{% block heading %}Vente · {{ sale.numero }}{% endblock %}
+
+{% block content %}
+<style>
+  .receipt { max-width: 560px; }
+  .receipt .head { text-align: center; border-bottom: 1px dashed var(--line); padding-bottom: 12px; margin-bottom: 12px; }
+  .receipt .head h2 { margin: 0; }
+  .receipt .tot { display: flex; justify-content: space-between; padding: 4px 0; }
+  .receipt .tot.grand { font-size: 1.2rem; font-weight: 800; border-top: 2px solid var(--line); margin-top: 8px; padding-top: 10px; }
+  @media print { .sidebar, .topbar, .no-print { display: none !important; } .content { padding: 0; } }
+</style>
+
+<div class="card receipt">
+  <div class="head">
+    <h2>{{ app_name }}</h2>
+    <p class="sub">{{ sale.numero }}<br>
+      {{ sale.created_at.strftime('%d/%m/%Y %H:%M') }} · Vendeur : {{ sale.vendeur.full_name }}<br>
+      {% if sale.cash_session %}{{ sale.cash_session.register.name }}{% endif %}</p>
+    {% if sale.status == 'validee' %}<span class="badge green">Validee</span>
+    {% elif sale.status == 'annulee' %}<span class="badge red">Annulee</span>
+    {% elif sale.status == 'remboursee' %}<span class="badge amber">Remboursee</span>
+    {% else %}<span class="badge gray">{{ labels.get(sale.status, sale.status) }}</span>{% endif %}
+  </div>
+
+  <table class="table">
+    <thead><tr><th>Article</th><th>Qte</th><th>P.U.</th><th>Total</th></tr></thead>
+    <tbody>
+      {% for l in sale.lines %}
+      <tr>
+        <td>{{ l.product.name }}<br><span class="pill">{{ l.unit.label if l.unit else '' }}</span></td>
+        <td>{{ l.quantity | qty }}</td>
+        <td>{{ l.prix_unitaire | num }}</td>
+        <td>{{ l.line_total | num }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="mt-16">
+    <div class="tot"><span>Sous-total</span><span>{{ (sale.montant_total + sale.remise) | num }} {{ sale.currency }}</span></div>
+    {% if sale.remise %}<div class="tot"><span>Remise</span><span>-{{ sale.remise | num }} {{ sale.currency }}</span></div>{% endif %}
+    <div class="tot grand"><span>Total</span><span>{{ sale.montant_total | num }} {{ sale.currency }}</span></div>
+    <div class="tot"><span>Paye</span><span>{{ sale.montant_paye | num }} {{ sale.currency }}</span></div>
+    {% if sale.montant_paye < sale.montant_total %}
+    <div class="tot" style="color:var(--danger)"><span>Reste du</span><span>{{ (sale.montant_total - sale.montant_paye) | num }} {{ sale.currency }}</span></div>
+    {% endif %}
+  </div>
+
+  {% if sale.payments %}
+  <div class="mt-16">
+    <h2>Paiements</h2>
+    {% for p in sale.payments %}
+    <div class="tot"><span>{{ payment_labels.get(p.method, p.method) }}{% if p.reference %} · {{ p.reference }}{% endif %}</span><span>{{ p.amount | num }} {{ p.currency }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if sale.refunds %}
+  <div class="mt-16">
+    <h2>Remboursements</h2>
+    {% for r in sale.refunds %}
+    <div class="tot"><span>{{ r.motif or 'Remboursement' }}</span><span>-{{ r.amount | num }} {{ r.currency }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="row mt-16 no-print">
+    <button class="btn ghost" onclick="window.print()">Imprimer</button>
+    <a href="{{ url_for('sales.index') }}" class="btn ghost">Retour aux ventes</a>
+  </div>
+</div>
+
+{% if current_user.has_permission(P.SALES_CANCEL) and sale.status in ('validee', 'remboursee') %}
+<div class="grid cols-3 no-print">
+  {% if sale.status == 'validee' %}
+  <div class="card">
+    <h2>Annuler la vente</h2>
+    <p class="sub">Contre-ecriture complete (stock + caisse). La vente reste tracee.</p>
+    <form method="post" action="{{ url_for('sales.cancel', sale_id=sale.id) }}" onsubmit="return confirm('Annuler cette vente ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="reason">Motif (obligatoire)</label>
+        <input type="text" id="reason" name="reason" required>
+      </div>
+      <label class="row" style="gap:6px;margin-bottom:14px"><input type="checkbox" name="restock" checked> Remettre les articles en stock</label>
+      <button class="btn danger" type="submit">Annuler la vente</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Rembourser</h2>
+    <p class="sub">Remboursement total ou partiel.</p>
+    <form method="post" action="{{ url_for('sales.refund', sale_id=sale.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="amount">Montant ({{ sale.currency }})</label>
+        <input type="text" id="amount" name="amount" value="{{ sale.montant_total | num }}" required>
+      </div>
+      <div class="field">
+        <label for="method">Moyen</label>
+        <select id="method" name="method">
+          {% for code, label in payment_labels.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="motif">Motif (obligatoire)</label>
+        <input type="text" id="motif" name="motif" required>
+      </div>
+      <label class="row" style="gap:6px;margin-bottom:14px"><input type="checkbox" name="restock" checked> Remettre les articles en stock</label>
+      <button class="btn" type="submit">Rembourser</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

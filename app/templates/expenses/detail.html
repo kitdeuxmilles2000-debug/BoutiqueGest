@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Dépense {{ expense.reference }}{% endblock %}
+{% block heading %}Depense · {{ expense.reference }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>{{ expense.reference }}
+        {% if expense.status == 'validee' %}<span class="badge green">Validee</span>
+        {% elif expense.status == 'en_attente' %}<span class="badge amber">En attente</span>
+        {% elif expense.status == 'rejetee' %}<span class="badge red">Rejetee</span>
+        {% else %}<span class="badge gray">Saisie</span>{% endif %}
+      </h2>
+      <p class="sub">{{ expense.motif }} · {{ expense.amount | num }} {{ expense.currency }} ·
+        {{ expense.category.name if expense.category else 'Sans categorie' }}</p>
+    </div>
+    <a href="{{ url_for('expenses.index') }}" class="btn ghost">Retour</a>
+  </div>
+
+  <div class="grid cols-4">
+    <div class="kpi"><span class="label">Date</span><span class="value" style="font-size:1.1rem">{{ expense.expense_date.strftime('%d/%m/%Y') }}</span></div>
+    <div class="kpi"><span class="label">Beneficiaire</span><span class="value" style="font-size:1.1rem">{{ expense.beneficiary or '—' }}</span></div>
+    <div class="kpi"><span class="label">Moyen</span><span class="value" style="font-size:1.1rem">{{ methods.get(expense.method, expense.method) }}</span></div>
+    <div class="kpi"><span class="label">Cree par</span><span class="value" style="font-size:1.1rem">{{ expense.created_by.full_name if expense.created_by else '—' }}</span></div>
+  </div>
+  {% if expense.reject_reason %}<p class="sub mt-16"><strong>Motif de rejet :</strong> {{ expense.reject_reason }}</p>{% endif %}
+  {% if expense.validated_by %}<p class="sub">Validee par {{ expense.validated_by.full_name }} le {{ expense.validated_at.strftime('%d/%m/%Y %H:%M') }}</p>{% endif %}
+</div>
+
+<div class="grid cols-3">
+  {% if current_user.has_permission(P.EXPENSES_CREATE) and expense.status in ('saisie', 'rejetee') %}
+  <div class="card">
+    <h2>Soumettre</h2>
+    <p class="sub">Envoyer la depense pour validation.</p>
+    <form method="post" action="{{ url_for('expenses.submit', expense_id=expense.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">Soumettre pour validation</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if current_user.has_permission(P.EXPENSES_VALIDATE) and expense.status != 'validee' %}
+  <div class="card">
+    <h2>Valider</h2>
+    <p class="sub">Deduit la caisse si un tiroir espece est ouvert.</p>
+    <form method="post" action="{{ url_for('expenses.validate', expense_id=expense.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">Valider la depense</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Rejeter</h2>
+    <form method="post" action="{{ url_for('expenses.reject', expense_id=expense.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="reason">Motif du rejet</label><input type="text" id="reason" name="reason" required></div>
+      <button class="btn danger" type="submit">Rejeter</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Crédit #{{ credit.id }}{% endblock %}
+{% block heading %}{{ type_labels.get(credit.type, credit.type) }} · {{ credit.partner_name }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>{{ credit.partner_name }}
+        <span class="badge {{ 'blue' if credit.is_client else 'amber' }}">{{ 'Client' if credit.is_client else 'Fournisseur' }}</span>
+        {% if credit.status == 'solde' %}<span class="badge green">Solde</span>
+        {% elif credit.status == 'en_retard' %}<span class="badge red">En retard</span>
+        {% elif credit.status == 'partiel' %}<span class="badge amber">Partiel</span>
+        {% else %}<span class="badge gray">Actif</span>{% endif %}
+      </h2>
+      <p class="sub">Cree le {{ credit.created_at.strftime('%d/%m/%Y') }}
+        {% if credit.sale %} · vente {{ credit.sale.numero }}{% endif %}
+        {% if credit.due_date %} · echeance {{ credit.due_date.strftime('%d/%m/%Y') }}{% endif %}</p>
+    </div>
+    <a href="{{ url_for('credits.index') }}" class="btn ghost">Retour</a>
+  </div>
+
+  <div class="grid cols-4">
+    <div class="kpi"><span class="label">Montant initial</span><span class="value">{{ credit.amount_initial | num }}</span><span class="foot">{{ credit.currency }}</span></div>
+    <div class="kpi"><span class="label">Reste du</span><span class="value {{ 'good' if credit.amount_remaining == 0 else 'bad' }}">{{ credit.amount_remaining | num }}</span><span class="foot">{{ credit.currency }}</span></div>
+    <div class="kpi"><span class="label">Regle</span><span class="value">{{ credit.settled_total | num }}</span><span class="foot">sur {{ credit.amount_initial | num }}</span></div>
+    <div class="kpi"><span class="label">Reglements</span><span class="value">{{ credit.settlements | length }}</span><span class="foot">operations</span></div>
+  </div>
+</div>
+
+<div class="grid cols-3">
+  {% if current_user.has_permission(P.CREDITS_MANAGE) and credit.status != 'solde' %}
+  <div class="card">
+    <h2>Enregistrer un reglement</h2>
+    <p class="sub">{{ 'Recouvrement creance' if credit.is_client else 'Paiement dette' }} : le solde est mis a jour et la caisse mouvementee si espece.</p>
+    <form method="post" action="{{ url_for('credits.settle', credit_id=credit.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="amount">Montant</label><input type="text" id="amount" name="amount" value="{{ credit.amount_remaining | num }}" required></div>
+      <div class="field">
+        <label for="method">Moyen</label>
+        <select id="method" name="method">{% for code, label in methods.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select>
+      </div>
+      <div class="field"><label for="reference">Reference</label><input type="text" id="reference" name="reference"></div>
+      <button class="btn" type="submit">Enregistrer le reglement</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if current_user.has_permission(P.CREDITS_MANAGE) %}
+  <div class="card">
+    <h2>Ajouter une echeance</h2>
+    <form method="post" action="{{ url_for('credits.add_installment', credit_id=credit.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="due_date">Date d'echeance</label><input type="date" id="due_date" name="due_date" required></div>
+      <div class="field"><label for="amount_due">Montant du</label><input type="text" id="amount_due" name="amount_due" required></div>
+      <button class="btn ghost" type="submit">Ajouter</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Echeances</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Date</th><th>Montant du</th><th>Statut</th></tr></thead>
+      <tbody>
+        {% for i in credit.installments %}
+        <tr>
+          <td>{{ i.due_date.strftime('%d/%m/%Y') }}</td>
+          <td>{{ i.amount_due | num }} {{ credit.currency }}</td>
+          <td>
+            {% if i.status == 'payee' %}<span class="badge green">Payee</span>
+            {% elif i.status == 'echue' %}<span class="badge red">Echue</span>
+            {% else %}<span class="badge gray">A venir</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="muted">Aucune echeance.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Historique des reglements</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Date</th><th>Montant</th><th>Moyen</th><th>Reference</th><th>Par</th></tr></thead>
+      <tbody>
+        {% for s in credit.settlements %}
+        <tr>
+          <td>{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ s.amount | num }} {{ s.currency }}</td>
+          <td>{{ methods.get(s.method, s.method) }}</td>
+          <td>{{ s.reference or '—' }}</td>
+          <td>{{ s.user.full_name if s.user else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Aucun reglement.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

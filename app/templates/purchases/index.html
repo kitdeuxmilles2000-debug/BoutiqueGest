@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Achats &amp; r&eacute;ceptions{% endblock %}
+{% block heading %}Achats &amp; r&eacute;ceptions{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Achats fournisseurs</h2>
+      <p class="sub">Commandes fournisseurs et entr&eacute;es en stock. Une r&eacute;ception valid&eacute;e est immuable (correction par contre-&eacute;criture).</p>
+    </div>
+    <div class="toolbar">
+      {% if current_user.has_permission(P.PURCHASE_PREPARE) %}
+      <a href="{{ url_for('purchases.new') }}" class="btn sm">Nouvel achat</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row">
+    <a href="{{ url_for('purchases.index') }}" class="btn {{ 'ghost' if status else '' }} sm">Tous</a>
+    {% for code, label in labels.items() %}
+    <a href="{{ url_for('purchases.index', status=code) }}" class="btn {{ '' if status == code else 'ghost' }} sm">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  <div class="table-wrap mt-16">
+    <table class="table">
+      <thead>
+        <tr><th>R&eacute;f&eacute;rence</th><th>Fournisseur</th><th>Date</th><th class="num">Total</th><th>Statut</th><th>R&egrave;glement</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for achat in purchases %}
+        <tr>
+          <td><a href="{{ url_for('purchases.detail', purchase_id=achat.id) }}">{{ achat.reference }}</a></td>
+          <td>{{ achat.supplier.name if achat.supplier else '—' }}</td>
+          <td>{{ achat.order_date.strftime('%d/%m/%Y') }}</td>
+          <td>{{ achat.montant_total | num }} {{ achat.currency }}</td>
+          <td><span class="badge {{ badges.get(achat.status, 'gray') }}">{{ labels.get(achat.status, achat.status) }}</span></td>
+          <td>{{ 'Comptant' if achat.paid_now else 'A credit' }}</td>
+          <td><a class="btn ghost sm" href="{{ url_for('purchases.detail', purchase_id=achat.id) }}">Ouvrir</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">Aucun achat.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

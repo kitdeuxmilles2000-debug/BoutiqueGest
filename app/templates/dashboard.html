@@ -1,0 +1,107 @@
+﻿{% extends "base.html" %}
+{% block title %}Tableau de bord{% endblock %}
+{% block heading %}Tableau de bord{% endblock %}
+
+{% block content %}
+{% if current_user.must_change_password %}
+<div class="alert warning">
+  Votre mot de passe est celui par dÃ©faut. <a href="{{ url_for('auth.change_password') }}">Changez-le maintenant</a>.
+</div>
+{% endif %}
+
+{% set nb_alertes = credits_en_retard | length + credits_proches | length + ruptures %}
+{% if nb_alertes %}
+<div class="card">
+  <h2>Centre de notifications</h2>
+  <p class="sub">Alertes hiÃ©rarchisÃ©es, visibles jusqu'Ã  rÃ©solution.</p>
+
+  {% for c in credits_en_retard %}
+  <div class="alert danger">
+    <strong>CrÃ©dit en retard</strong> â€” {{ c.partner_name }} Â·
+    {{ c.amount_remaining | num }} {{ c.currency }} Ã©chu le {{ c.due_date.strftime('%d/%m/%Y') }}
+    <a href="{{ url_for('credits.detail', credit_id=c.id) }}">Voir</a>
+  </div>
+  {% endfor %}
+
+  {% for c in credits_proches %}
+  <div class="alert warning">
+    <strong>Ã‰chÃ©ance proche</strong> â€” {{ c.partner_name }} Â·
+    {{ c.amount_remaining | num }} {{ c.currency }} Ã  rÃ©gler le {{ c.due_date.strftime('%d/%m/%Y') }}
+    <a href="{{ url_for('credits.detail', credit_id=c.id) }}">Voir</a>
+  </div>
+  {% endfor %}
+
+  {% if ruptures %}
+  <div class="alert warning">
+    <strong>{{ ruptures }} produit(s) en rupture</strong> de stock.
+    <a href="{{ url_for('stock.index') }}">Consulter le stock</a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="grid cols-4">
+  <div class="card kpi">
+    <span class="label">Ventes du jour (par devise)</span>
+    <div style="margin-top:6px">
+      {% for dev, v in ventes_par_devise.items() %}
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span>{{ dev }}</span><span class="value accent" style="font-size:1.25rem">{{ v.montant | num }} {{ dev }}</span></div>
+      <div class="foot">{{ v.count }} vente(s) · Marge {{ v.marge | num }} {{ dev }}</div>
+      {% else %}
+      <span class="value accent">0</span>
+      <span class="foot">Aucune vente aujourd'hui</span>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card kpi">
+    <span class="label">Marge du jour</span>
+    <span class="value good">{{ ventes_marge | num }}</span>
+    <span class="foot">Somme des marges par vente (non cumulée entre devises)</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Caisse</span>
+    <span class="value">{% if caisse_ouverte %}<span class="badge green">Ouverte</span>{% else %}<span class="badge gray">FermÃ©e</span>{% endif %}</span>
+    <span class="foot">{{ caisse_label or 'aucune caisse' }}</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Stock</span>
+    <span class="value {{ 'bad' if ruptures }}">{{ ruptures }} <span class="muted" style="font-size:.9rem">rupture(s)</span></span>
+    <span class="foot">{{ stock_bas }} produit(s) sous le seuil</span>
+  </div>
+</div>
+
+<div class="card mt-16">
+  <h2>Bienvenue, {{ current_user.full_name }}</h2>
+  <p class="sub">Catalogue, stock, point de vente et caisse opÃ©rationnels. Achats, dÃ©penses, crÃ©dits et rapports par phases.</p>
+  <div class="grid cols-3">
+    <div>
+      <p class="muted">RÃ´le</p>
+      <p><span class="badge blue">{{ current_user.role.label if current_user.role else 'â€”' }}</span></p>
+    </div>
+    <div>
+      <p class="muted">DerniÃ¨re connexion</p>
+      <p>{{ current_user.last_login_at.strftime('%d/%m/%Y %H:%M') if current_user.last_login_at else 'â€”' }}</p>
+    </div>
+    <div>
+      <p class="muted">Permissions actives</p>
+      <p>{{ 'Toutes (super administrateur)' if current_user.is_super_admin else (current_user.role.permission_codes|length if current_user.role else 0) }}</p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Prochaines Ã©tapes du projet</h2>
+  <p class="sub">Catalogue, stock, ventes, caisse, dÃ©penses et crÃ©dits sont en place. Les modules suivants viendront par phases.</p>
+  <div class="grid cols-3">
+    <div class="card"><strong>5 Â· Ventes &amp; caisse</strong> <span class="badge green">fait</span><p class="muted mt-0">Point de vente, paiements, clÃ´tures, rapprochements.</p></div>
+    <div class="card"><strong>6 Â· DÃ©penses &amp; dettes</strong> <span class="badge green">fait</span><p class="muted mt-0">DÃ©penses, crÃ©dits, Ã©chÃ©ances, rÃ¨glements.</p></div>
+    <div class="card"><strong>7 Â· Rapports</strong> <span class="badge green">fait</span><p class="muted mt-0">Indicateurs par devise, trÃ©sorerie, exports Excel/PDF.</p></div>
+    <div class="card"><strong>8 Â· Local / distant</strong> <span class="badge green">fait</span><p class="muted mt-0">Sauvegardes vÃ©rifiÃ©es, restauration, sync idempotente.</p></div>
+    <div class="card"><strong>9 Â· Achats / rÃ©ceptions</strong> <span class="badge green">fait</span><p class="muted mt-0">Commandes fournisseurs, rÃ©ception stock/CMP, dette fournisseur.</p></div>
+    <div class="card"><strong>10 Â· ParamÃ©trage</strong> <span class="badge green">fait</span><p class="muted mt-0">Taux de change manuel, e-mails &amp; rapport journalier.</p></div>
+    <div class="card"><strong>Recette finale</strong> <span class="badge green">fait</span><p class="muted mt-0">CritÃ¨res T01â€“T16 du CDC + responsivitÃ© (30/30).</p></div>
+    <div class="card"><strong>Pilote &amp; production</strong> <span class="badge amber">Ã  venir</span><p class="muted mt-0">Tests utilisateurs, formation, migration des donnÃ©es initiales.</p></div>
+  </div>
+</div>
+{% endblock %}
+

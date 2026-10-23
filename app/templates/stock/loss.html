@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Perte de stock{% endblock %}
+{% block heading %}Déclarer une perte{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Perte, casse ou péremption</h2>
+  <p class="sub">Chaque perte est tracée avec son motif et diminue le stock.</p>
+
+  <form method="post" class="form-narrow">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field">
+      <label for="product_id">Produit</label>
+      <select id="product_id" name="product_id" required onchange="updateUnits()">
+        <option value="">— Choisir —</option>
+        {% for p in products %}<option value="{{ p.id }}">{{ p.name }} ({{ p.code }})</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="unit_id">Unité</label>
+      <select id="unit_id" name="unit_id"></select>
+    </div>
+    <div class="field">
+      <label for="quantity">Quantité perdue</label>
+      <input type="text" id="quantity" name="quantity" required>
+    </div>
+    <div class="field">
+      <label for="kind">Type</label>
+      <select id="kind" name="kind">
+        {% for code, label in kinds.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="reason">Motif (obligatoire)</label>
+      <textarea id="reason" name="reason" rows="2" required></textarea>
+    </div>
+    <div class="row">
+      <button type="submit" class="btn danger">Enregistrer la perte</button>
+      <a href="{{ url_for('stock.index') }}" class="btn ghost">Annuler</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const PRODUCT_UNITS = {
+  {% for p in products %}
+  "{{ p.id }}": [
+    {"id": {{ p.base_unit_id }}, "label": "{{ p.base_unit.label }} (base)"},
+    {% for pu in p.selling_units %}{% if pu.unit_id != p.base_unit_id %}{"id": {{ pu.unit_id }}, "label": "{{ pu.unit.label }}"},{% endif %}{% endfor %}
+  ],
+  {% endfor %}
+};
+function updateUnits() {
+  const pid = document.getElementById('product_id').value;
+  const sel = document.getElementById('unit_id');
+  sel.innerHTML = '';
+  (PRODUCT_UNITS[pid] || []).forEach(function (u) {
+    const opt = document.createElement('option');
+    opt.value = u.id; opt.textContent = u.label; sel.appendChild(opt);
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}E-mails & rapport{% endblock %}
+{% block heading %}E-mails · Rapport journalier{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Rapport journalier au propriétaire</h2>
+  <p class="sub">Le rapport est <strong>mis en file</strong> puis envoyé si un serveur SMTP est configuré
+    (<code>SMTP_HOST</code>). Sans SMTP, il reste <strong>en attente</strong> et consultable ici.</p>
+  {% if not smtp_configured %}
+  <div class="alert warning">SMTP non configuré : les messages restent en attente. Renseignez les variables
+    <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code> pour un envoi réel.</div>
+  {% endif %}
+  <form method="post" action="{{ url_for('admin.outbox_queue_report') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <label style="flex:1;min-width:240px">Destinataire
+        <input type="email" name="to_address" value="{{ report_to }}" placeholder="proprietaire@exemple.com" required>
+      </label>
+      <button class="btn">Mettre en file d'attente</button>
+    </div>
+  </form>
+  <div class="row between mt-16">
+    <p class="hint">Les réseaux sociaux et l'envoi automatique programmé peuvent être branchés ultérieurement ; le cœur reste local.</p>
+    <form method="post" action="{{ url_for('admin.outbox_send') }}" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn">Envoyer les messages en attente</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>File d'envoi</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Créé le</th><th>Destinataire</th><th>Objet</th><th>Statut</th><th>Essais</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in messages %}
+        <tr>
+          <td>{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ m.to_address }}</td>
+          <td>{{ m.subject }}</td>
+          <td><span class="badge {{ OUTBOX_STATUS_BADGES.get(m.status, 'gray') }}">{{ status_labels.get(m.status, m.status) }}</span>
+            {% if m.last_error %}<br><span class="muted" style="font-size:.8rem">{{ m.last_error }}</span>{% endif %}
+          </td>
+          <td>{{ m.attempts }}</td>
+          <td>
+            {% if m.status != 'envoye' %}
+            <form method="post" action="{{ url_for('admin.outbox_resend', message_id=m.id) }}" style="margin:0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn ghost sm">Renvoyer</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Aucun message.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

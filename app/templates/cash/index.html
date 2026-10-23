@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Caisse{% endblock %}
+{% block heading %}Caisse{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  {% if own_session %}
+  <div class="card">
+    <h2>Ma caisse ouverte</h2>
+    <p class="sub">{{ own_session.register.name }} · {{ own_session.currency }}</p>
+    <div class="kpi">
+      <span class="label">Fond de caisse initial</span>
+      <span class="value">{{ own_session.solde_initial | num }} {{ own_session.currency }}</span>
+      <span class="foot">Ouverte le {{ own_session.opened_at.strftime('%d/%m/%Y %H:%M') }}</span>
+    </div>
+    <div class="row mt-16">
+      <a href="{{ url_for('cash.session_detail', session_id=own_session.id) }}" class="btn">Voir la caisse</a>
+      {% if current_user.has_permission(P.SALES_CREATE) %}
+      <a href="{{ url_for('pos.index') }}" class="btn ghost">Vendre</a>
+      {% endif %}
+    </div>
+  </div>
+  {% elif registers %}
+  <div class="card">
+    <h2>Ouvrir une caisse</h2>
+    <p class="sub">Saisissez le fond de caisse present dans le tiroir au demarrage.</p>
+    <form method="post" action="{{ url_for('cash.open_session') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="register_id">Caisse</label>
+        <select id="register_id" name="register_id" required>
+          {% for r in registers %}<option value="{{ r.id }}">{{ r.name }} ({{ r.currency }})</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="solde_initial">Fond de caisse initial</label>
+        <input type="text" id="solde_initial" name="solde_initial" value="0">
+      </div>
+      <button class="btn" type="submit">Ouvrir</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="card">
+    <h2>Aucune caisse configurée</h2>
+    <p class="sub">Contactez l'administrateur pour creer une caisse.</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>{{ 'Toutes les sessions' if current_user.has_permission(P.CASH_VIEW_ALL) else 'Mes sessions' }}</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Ouverte le</th><th>Caisse</th><th>Vendeur</th><th>Theorique</th><th>Compte</th><th>Ecart</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td>{{ s.opened_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ s.register.name }} <span class="pill">{{ s.currency }}</span></td>
+          <td>{{ s.vendeur.full_name }}</td>
+          <td>{{ s.compute_theorique() | num }}</td>
+          <td>{{ s.solde_compte | num if s.solde_compte is not none else '—' }}</td>
+          <td>{% if s.status == 'validee' %}<span class="{{ 'badge green' if s.ecart == 0 else 'badge red' }}">{{ s.ecart | num }}</span>{% else %}—{% endif %}</td>
+          <td>
+            {% if s.status == 'validee' %}<span class="badge green">Validee</span>
+            {% elif s.status == 'soumise' %}<span class="badge amber">Soumise</span>
+            {% else %}<span class="badge gray">Ouverte</span>{% endif %}
+          </td>
+          <td><a class="btn ghost sm" href="{{ url_for('cash.session_detail', session_id=s.id) }}">Ouvrir</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted">Aucune session.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

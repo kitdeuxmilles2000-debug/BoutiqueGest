@@ -1,0 +1,26 @@
+/* Barre de statut type iTunes */
+.sys-topbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 40;
+  background: #0f172a;
+  color: #f1f5f9;
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  padding: 4px 14px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 6px 18px rgba(15,23,42,.25);
+  font-size: .82rem;
+}
+@media (max-width: 860px){ .sys-topbar{ top: 0; bottom: auto; } }
+.sys-topbar.show { display: flex; }
+.sys-topbar .sys-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.sys-conn { padding: 2px 8px; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+.sys-conn.on { background: #14532d; color: #dcfce7; }
+.sys-conn.off { background: #7f1d1d; color: #fee2e2; }
+.sys-bar-track { flex: 1; height: 4px; background: rgba(255,255,255,.15); border-radius: 999px; position: relative; }
+.sys-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg,#60a5fa,#3b82f6); border-radius: 999px; transition: width .25s ease; }
+.sys-pct { min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }

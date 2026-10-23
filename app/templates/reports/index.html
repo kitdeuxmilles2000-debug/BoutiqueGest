@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Rapports{% endblock %}
+{% block heading %}Rapports{% endblock %}
+
+{% block content %}
+<style>
+  .periods { display: flex; flex-wrap: wrap; gap: 6px; }
+  .periods a { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; font-weight: 600; color: var(--ink); }
+  .periods a.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .bar { height: 10px; border-radius: 6px; background: var(--primary-050); overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--primary-600); }
+  .mini { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+  .mini .lbl { width: 90px; font-size: .82rem; color: var(--muted); }
+  .mini .val { font-weight: 700; font-size: .84rem; }
+  @media print { .sidebar, .topbar, .no-print, .periods { display: none !important; } }
+</style>
+
+<div class="card no-print">
+  <div class="row between">
+    <div class="periods">
+      {% for code, label in periode_labels.items() %}
+      <a href="{{ url_for('reports.index', periode=code) }}" class="{{ 'active' if periode == code }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="row">
+      {% if current_user.has_permission(P.REPORTS_EXPORT) %}
+      <a href="{{ url_for('reports.export_csv', periode=periode) }}" class="btn">Export Excel (CSV)</a>
+      {% endif %}
+      <button class="btn ghost" onclick="window.print()">Imprimer / PDF</button>
+    </div>
+  </div>
+  <p class="sub mt-16">Periode : du {{ debut.strftime('%d/%m/%Y') }} au {{ (fin).strftime('%d/%m/%Y') }}.
+    Les montants sont **separes par devise** (CDF / USD jamais melanges).</p>
+</div>
+
+<div class="grid cols-4">
+  {% for cur, v in ventes.items() %}
+  <div class="card kpi">
+    <span class="label">CA net · {{ cur }}</span>
+    <span class="value accent">{{ v.ca | num }}</span>
+    <span class="foot">{{ v.count }} vente(s) · marge {{ v.marge | num }} {{ cur }}</span>
+  </div>
+  {% endfor %}
+  {% for cur, r in resultat.items() %}
+  <div class="card kpi">
+    <span class="label">Resultat estime · {{ cur }}</span>
+    <span class="value {{ 'good' if r.resultat >= 0 else 'bad' }}">{{ r.resultat | num }}</span>
+    <span class="foot">marge {{ r.marge | num }} − charges {{ r.charges | num }}</span>
+  </div>
+  {% endfor %}
+  {% if not ventes and not resultat %}
+  <div class="card kpi"><span class="label">Aucune activite</span><span class="value muted">—</span><span class="foot">Sur la periode choisie</span></div>
+  {% endif %}
+</div>
+
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Ventes par devise</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Ventes</th><th>CA</th><th>Cout</th><th>Marge</th></tr></thead>
+        <tbody>
+          {% for cur, v in ventes.items() %}
+          <tr><td><span class="badge blue">{{ cur }}</span></td><td>{{ v.count }}</td><td>{{ v.ca | num }}</td><td>{{ v.cout | num }}</td><td class="good">{{ v.marge | num }}</td></tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">Aucune vente.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Charges (depenses validees)</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Total charges</th></tr></thead>
+        <tbody>
+          {% for cur, total in charges.items() %}
+          <tr><td><span class="badge amber">{{ cur }}</span></td><td>{{ total | num }}</td></tr>
+          {% else %}
+          <tr><td colspan="2" class="muted">Aucune charge validee.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="sub mt-16">{{ expenses | length }} depense(s) validee(s).</p>
+  </div>
+
+  <div class="card">
+    <h2>Creances &amp; dettes en cours</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Creances clients</th><th>Dettes fourn.</th></tr></thead>
+        <tbody>
+          {% for cur, v in creances.items() %}
+          <tr><td><span class="badge blue">{{ cur }}</span></td><td class="good">{{ v.client | num }}</td><td style="color:var(--danger)">{{ v.fournisseur | num }}</td></tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">Aucun encours.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Tresorerie (mouvements de caisse)</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Nature</th><th>Devise</th><th>Montant</th></tr></thead>
+        <tbody>
+          {% for kind, par_dev in tresorerie_nature.items() %}
+            {% for cur, amount in par_dev.items() %}
+            <tr>
+              <td>{{ movement_labels.get(kind, kind) }}</td>
+              <td><span class="pill">{{ cur }}</span></td>
+              <td style="font-weight:700;color:{{ 'var(--success)' if amount >= 0 else 'var(--danger)' }}">{{ '+' if amount >= 0 }}{{ amount | num }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr><td colspan="3" class="muted">Aucun mouvement.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-16">
+      {% for cur, total in tresorerie_devise.items() %}
+      <div class="mini"><span class="lbl">Net {{ cur }}</span><span class="val {{ 'good' if total >= 0 else 'bad' }}">{{ total | num }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Top produits</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Produit</th><th>Qte</th><th>CA</th><th>Marge</th></tr></thead>
+        <tbody>
+          {% for row in top %}
+          <tr>
+            <td>{{ row.product.name if row.product else '?' }}</td>
+            <td>{{ row.qte | qty }}</td>
+            <td>{{ row.ca | num }} {{ row.currency }}</td>
+            <td class="good">{{ row.marge | num }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">Aucune vente sur la periode.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ventes CDF par jour</h2>
+    {% if serie %}
+      {% set maxv = serie | map(attribute=1) | max %}
+      {% for d, amount in serie %}
+      <div class="mini">
+        <span class="lbl">{{ d.strftime('%d/%m') }}</span>
+        <span class="bar" style="flex:1"><span style="width: {{ (amount / maxv * 100) if maxv else 0 }}%"></span></span>
+        <span class="val">{{ amount | num }}</span>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="muted">Aucune vente CDF sur la periode.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

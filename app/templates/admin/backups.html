@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Sauvegardes{% endblock %}
+{% block heading %}Sauvegardes{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Sauvegardes locales</h2>
+      <p class="sub">Copie cohérente de la base SQLite (mode WAL), avec contrôle d'intégrité automatique. Retention : {{ retention or 30 }} versions.</p>
+    </div>
+    <div class="toolbar">
+      <form method="post" action="{{ url_for('admin.backup_create') }}" style="margin:0">
+        <button class="btn sm">Créer une sauvegarde</button>
+      </form>
+      <form method="post" action="{{ url_for('admin.backup_purge') }}" style="margin:0">
+        <button class="btn ghost sm">Appliquer la rétention</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Fichier</th><th>Date/heure</th><th>Taille</th><th>Intégrité</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for b in backups %}
+        <tr>
+          <td>{{ b.filename }}</td>
+          <td>{{ b.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          <td>{{ (b.size / 1024) | round(1) }} Ko</td>
+          <td>
+            {% if b.valid %}<span class="badge green">OK</span>
+            {% else %}<span class="badge red">Corrompue</span>{% endif %}
+          </td>
+          <td><a class="btn ghost sm" href="{{ url_for('admin.backup_download', filename=b.filename) }}">Télécharger</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Aucune sauvegarde pour l'instant.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Historique (points de restauration)</h2>
+      <p class="sub">Snapshots automatiques et manuels de la base. La restauration est protégée par le <strong>mot de passe propriétaire</strong>.</p>
+    </div>
+    <div class="toolbar">
+      <form method="post" action="{{ url_for('admin.history_snapshot_create') }}" style="margin:0">
+        <input type="hidden" name="owner_password" id="owner_pw_snap">
+        <button type="button" class="btn sm" onclick="askOwner('owner_pw_snap', this.form)">Créer un instantané</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Fichier</th><th>Date/heure</th><th>Taille</th><th></th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for s in snapshots %}
+        <tr>
+          <td>{{ s.filename }}</td>
+          <td>{{ s.mtime.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          <td>{{ (s.size / 1024) | round(1) }} Ko</td>
+          <td><a class="btn ghost sm" href="{{ url_for('admin.history_download', filename=s.filename) }}">Télécharger</a></td>
+          <td>
+            <form method="post" action="{{ url_for('admin.history_restore', filename=s.filename) }}" style="margin:0" onsubmit="return confirm('Restaurer cet instantané ? Action critique.');">
+              <input type="hidden" name="owner_password" class="owner_pw_restore" required>
+              <input type="text" name="reason" class="input" placeholder="Motif de restauration (obligatoire)" required style="min-width:200px">
+              <button type="button" class="btn danger sm" onclick="fillOwnerAndSubmit(this.form)">Restaurer</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Aucun instantané.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function askOwner(inputId, form){
+  const p = prompt('Mot de passe du propriétaire (re-authentification) :');
+  if(p !== null){
+    document.getElementById(inputId).value = p;
+    form.submit();
+  }
+}
+function fillOwnerAndSubmit(form){
+  const inp = form.querySelector('.owner_pw_restore');
+  const p = prompt('Mot de passe du propriétaire (re-authentification) :');
+  if(p !== null){
+    inp.value = p;
+    form.submit();
+  }
+}
+</script>
+{% endblock %}
