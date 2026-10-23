@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Accès interdit{% endblock %}
+{% block heading %}Accès interdit{% endblock %}
+
+{% block content %}
+<div class="error-wrap">
+  <div>
+    <p class="error-code">403</p>
+    <h2>Permission insuffisante</h2>
+    <p class="muted">Votre rôle ne permet pas d'accéder à cette action. La tentative a été enregistrée.</p>
+    <a href="{{ url_for('main.dashboard') }}" class="btn mt-16">Retour au tableau de bord</a>
+  </div>
+</div>
+{% endblock %}

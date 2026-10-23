@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Synchronisation{% endblock %}
+{% block heading %}Synchronisation{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="card kpi">
+    <span class="label">Derniere synchro</span>
+    <span class="value">{{ stats.last_ack_at.strftime('%d/%m %H:%M') if stats.last_ack_at else '—' }}</span>
+    <span class="foot">Acquittement le plus recent</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">En attente / erreur</span>
+    <span class="value {{ 'bad' if stats.pending else 'good' }}">{{ stats.pending }}</span>
+    <span class="foot">Operations a envoyer</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Acquittees</span>
+    <span class="value accent">{{ stats.counts['acquitte'] }}</span>
+    <span class="foot">Confirmees par le distant</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Total evenements</span>
+    <span class="value">{{ stats.total }}</span>
+    <span class="foot">File locale</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>File de synchronisation</h2>
+      <p class="sub">Le serveur local reste la reference. Les ventes, annulations et remboursements sont
+        mis en file et repliques vers le serveur distant des qu'Internet est disponible.
+        Le rejeu est <strong>idempotent</strong> : un evenement deja acquitte ne cree rien de nouveau.</p>
+    </div>
+    <form method="post" action="{{ url_for('admin.sync_process') }}" style="margin:0">
+      <button class="btn">Traiter la file</button>
+    </form>
+  </div>
+
+  <div class="table-wrap mt-16">
+    <table class="table">
+      <thead><tr><th>Statut</th><th>Nombre</th></tr></thead>
+      <tbody>
+        {% for status, label in stats.labels.items() %}
+        <tr>
+          <td><span class="badge {{ SYNC_STATUS_BADGES.get(status, 'gray') }}">{{ label }}</span></td>
+          <td>{{ stats.counts.get(status, 0) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint mt-16">Sans serveur distant configure (SYNC_ENABLED / SYNC_REMOTE_URL), la file reste locale :
+    la boutique continue de fonctionner sans Internet.</p>
+</div>
+{% endblock %}

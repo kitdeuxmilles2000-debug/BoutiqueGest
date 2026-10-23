@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Journal d'audit{% endblock %}
+{% block heading %}Journal d'audit{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Événements sensibles</h2>
+  <p class="sub">Journal en lecture seule : actions, accès, validations et tentatives refusées.</p>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Date/heure (UTC)</th><th>Utilisateur</th><th>Action</th><th>Entité</th><th>Adresse IP</th><th>Motif</th></tr>
+      </thead>
+      <tbody>
+        {% for log in pagination.items %}
+        <tr>
+          <td>{{ log.at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          <td>{{ log.username or '—' }}</td>
+          <td>
+            {% if log.action in ('login_failed', 'access_denied', 'reauth_failed') %}
+              <span class="badge red">{{ log.action }}</span>
+            {% elif log.action in ('login', 'logout', 'reauth') %}
+              <span class="badge blue">{{ log.action }}</span>
+            {% else %}
+              <span class="badge gray">{{ log.action }}</span>
+            {% endif %}
+          </td>
+          <td>{{ log.entity or '—' }}{% if log.entity_uuid %}<br><span class="pill">{{ log.entity_uuid[:18] }}</span>{% endif %}</td>
+          <td>{{ log.ip or '—' }}</td>
+          <td style="white-space:normal">{{ log.reason or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Aucun événement.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagination.pages > 1 %}
+  <div class="row mt-16">
+    {% if pagination.has_prev %}
+      <a class="btn ghost sm" href="{{ url_for('admin.audit', page=pagination.prev_num) }}">← Précédent</a>
+    {% endif %}
+    <span class="pill">Page {{ pagination.page }} / {{ pagination.pages }}</span>
+    {% if pagination.has_next %}
+      <a class="btn ghost sm" href="{{ url_for('admin.audit', page=pagination.next_num) }}">Suivant →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

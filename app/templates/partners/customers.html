@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Clients{% endblock %}
+{% block heading %}Clients{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Clients</h2>
+    <p class="sub">{{ customers|length }} client(s).</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Nom</th><th>Contact</th><th>Plafond credit</th><th>Encours</th><th>Etat</th><th></th></tr></thead>
+        <tbody>
+          {% for c in customers %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.contact or '—' }}</td>
+            <td>{{ c.credit_limit | num }}</td>
+            <td>{{ c.outstanding | num }}</td>
+            <td>{% if c.active %}<span class="badge green">Actif</span>{% else %}<span class="badge gray">Inactif</span>{% endif %}</td>
+            <td>{% if current_user.has_permission(P.PARTNERS_MANAGE) %}<a class="btn ghost sm" href="{{ url_for('partners.edit_customer', customer_id=c.id) }}">Modifier</a>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="muted">Aucun client.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if current_user.has_permission(P.PARTNERS_MANAGE) %}
+  <div class="card">
+    <h2>Nouveau client</h2>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="name">Nom</label><input type="text" id="name" name="name" required></div>
+      <div class="field"><label for="contact">Contact</label><input type="text" id="contact" name="contact"></div>
+      <div class="field"><label for="credit_limit">Plafond de credit</label><input type="text" id="credit_limit" name="credit_limit" value="0"><p class="hint">0 = pas de plafond.</p></div>
+      <button class="btn" type="submit">Creer</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

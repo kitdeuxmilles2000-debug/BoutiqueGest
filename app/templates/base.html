@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">Boutique<span class="dot">Gest</span></div>
+    <nav class="nav">
+      <div class="nav-group">Exploitation</div>
+      <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if request.endpoint == 'main.dashboard' }}">
+        <span class="ico">▦</span> Tableau de bord
+      </a>
+      {% if current_user.is_authenticated and current_user.has_permission(P.SALES_CREATE) %}
+      <a href="{{ url_for('pos.index') }}" class="{{ 'active' if request.endpoint == 'pos.index' }}">
+        <span class="ico">🛒</span> Point de vente
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.PRODUCTS_VIEW) %}
+      <a href="{{ url_for('products.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('products.') }}">
+        <span class="ico">📦</span> Produits
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.STOCK_VIEW) %}
+      <a href="{{ url_for('stock.index') }}" class="{{ 'active' if request.endpoint == 'stock.index' }}">
+        <span class="ico">📊</span> Stock
+      </a>
+      <a href="{{ url_for('stock.movements') }}" class="{{ 'active' if request.endpoint == 'stock.movements' }}">
+        <span class="ico">🔄</span> Mouvements
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.STOCK_MANAGE) %}
+      <a href="{{ url_for('stock.entry') }}" class="{{ 'active' if request.endpoint == 'stock.entry' }}">
+        <span class="ico">⬆️</span> Entrée de stock
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.LOSS_MANAGE) %}
+      <a href="{{ url_for('stock.index') }}" class="">Pertes</a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.INVENTORY_MANAGE) %}
+      <a href="{{ url_for('stock.index') }}">Inventaire</a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.PURCHASE_VIEW) %}
+      <a href="{{ url_for('purchases.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('purchases.') }}">
+        <span class="ico">🚚</span> Achats &amp; réceptions
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and (current_user.has_any(P.SALES_VIEW, P.SALES_VIEW_ALL)) %}
+      <a href="{{ url_for('sales.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('sales.') }}">
+        <span class="ico">🧾</span> Ventes
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and (current_user.has_any(P.CASH_OPEN, P.CASH_VIEW_ALL)) %}
+      <a href="{{ url_for('cash.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('cash.') }}">
+        <span class="ico">💵</span> Caisse
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.EXPENSES_VIEW) %}
+      <a href="{{ url_for('expenses.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('expenses.') }}">
+        <span class="ico">🧾</span> Dépenses
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.CREDITS_VIEW) %}
+      <a href="{{ url_for('credits.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('credits.') }}">
+        <span class="ico">🤝</span> Crédits &amp; dettes
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.PARTNERS_VIEW) %}
+      <a href="{{ url_for('partners.customers') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('partners.') }}">
+        <span class="ico">👤</span> Clients &amp; fournisseurs
+      </a>
+      {% endif %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.REPORTS_VIEW) %}
+      <a href="{{ url_for('reports.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('reports.') }}">
+        <span class="ico">📈</span> Rapports
+      </a>
+      {% endif %}
+
+      {% if current_user.is_authenticated and (current_user.has_any(P.USERS_VIEW, P.ROLES_MANAGE, P.AUDIT_VIEW, P.SETTINGS_MANAGE, P.BACKUP_MANAGE, P.SYNC_MANAGE)) %}
+      <div class="nav-group">Administration</div>
+      {% if current_user.has_permission(P.USERS_VIEW) %}
+      <a href="{{ url_for('admin.users') }}" class="{{ 'active' if request.endpoint == 'admin.users' }}">
+        <span class="ico">👥</span> Utilisateurs
+      </a>
+      {% endif %}
+      {% if current_user.has_permission(P.ROLES_MANAGE) %}
+      <a href="{{ url_for('admin.roles') }}" class="{{ 'active' if request.endpoint == 'admin.roles' }}">
+        <span class="ico">🔐</span> Rôles &amp; permissions
+      </a>
+      {% endif %}
+      {% if current_user.has_permission(P.AUDIT_VIEW) %}
+      <a href="{{ url_for('admin.audit') }}" class="{{ 'active' if request.endpoint == 'admin.audit' }}">
+        <span class="ico">📜</span> Journal d'audit
+      </a>
+      {% endif %}
+      {% if current_user.has_permission(P.BACKUP_MANAGE) %}
+      <a href="{{ url_for('admin.backups') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.backup') }}">
+        <span class="ico">💾</span> Sauvegardes
+      </a>
+      {% endif %}
+      {% if current_user.has_permission(P.SYNC_MANAGE) %}
+      <a href="{{ url_for('admin.sync') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.sync') }}">
+        <span class="ico">🔁</span> Synchronisation
+      </a>
+      {% endif %}
+      {% if current_user.has_permission(P.SETTINGS_MANAGE) %}
+      <a href="{{ url_for('admin.exchange_rate') }}" class="{{ 'active' if request.endpoint == 'admin.exchange_rate' }}">
+        <span class="ico">💱</span> Taux de change
+      </a>
+      <a href="{{ url_for('admin.outbox') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.outbox') }}">
+        <span class="ico">✉️</span> E-mails &amp; rapport
+      </a>
+      {% endif %}
+      {% endif %}
+    </nav>
+    <div class="sidebar-foot">
+      {{ app_name }} v{{ app_version }}
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar" style="top: auto;">
+      <div class="row" style="gap:14px">
+        <button class="btn ghost sm" onclick="document.getElementById('sidebar').classList.toggle('open')" style="display:none" id="menuBtn">☰</button>
+        <h1>{% block heading %}{{ app_name }}{% endblock %}</h1>
+        {% if current_user.is_authenticated %}
+        <span class="sys-conn on" id="sysConn">En ligne</span>
+        {% endif %}
+      </div>
+      <div class="row" style="gap:14px">
+        {% if current_user.is_authenticated %}
+          <span class="who">Connecté : <strong>{{ current_user.full_name }}</strong>
+            <span class="badge blue">{{ current_user.role.label if current_user.role else '—' }}</span>
+          </span>
+          <a href="{{ url_for('auth.change_password') }}" class="btn ghost sm">Mot de passe</a>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn sm">Déconnexion</button>
+          </form>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="sys-topbar" id="sysBar">
+      <div class="sys-row">
+        <div class="row" style="gap:10px;align-items:center">
+          <span id="sysText">Prêt</span>
+        </div>
+        <div class="row" style="gap:10px;align-items:center;flex:1;max-width:420px" id="sysProg" style="display:none">
+          <div class="sys-bar-track"><div class="sys-bar-fill"></div></div>
+          <span class="sys-pct" id="sysPct">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <main class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="alerts">
+          {% for category, message in messages %}
+            <div class="alert {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<script>
+  (function () {
+    var btn = document.getElementById('menuBtn');
+    if (btn && window.innerWidth <= 860) { btn.style.display = 'inline-flex'; }
+    window.addEventListener('resize', function () {
+      if (btn) { btn.style.display = window.innerWidth <= 860 ? 'inline-flex' : 'none'; }
+    });
+  })();
+</script>
+<script src="{{ url_for('static', filename='js/system-status.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Inventaire {{ session.reference }}{% endblock %}
+{% block heading %}Inventaire · {{ session.reference }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>{{ session.reference }}
+        {% if session.status == 'validee' %}<span class="badge green">Validée</span>
+        {% elif session.status == 'soumise' %}<span class="badge amber">Soumise</span>
+        {% else %}<span class="badge gray">Ouverte</span>{% endif %}
+      </h2>
+      <p class="sub">Périmètre : {{ session.scope or '—' }} · créée le {{ session.created_at.strftime('%d/%m/%Y %H:%M') }}
+        {% if session.responsable %}par {{ session.responsable.full_name }}{% endif %}
+        {% if session.validated_at %} · validée le {{ session.validated_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}</p>
+    </div>
+    <div class="row">
+      {% if session.status == 'soumise' and current_user.has_permission(P.INVENTORY_VALIDATE) %}
+      <form method="post" action="{{ url_for('stock.inventory_validate', session_id=session.id) }}" onsubmit="return confirm('Valider l\'inventaire et appliquer les écarts au stock ?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn">Valider l'inventaire</button>
+      </form>
+      {% endif %}
+      <a href="{{ url_for('stock.inventory_list') }}" class="btn ghost">Retour</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Comptage physique</h2>
+  <p class="sub">Saisissez les quantités comptées. L'écart est calculé automatiquement à la soumission.</p>
+  {% if session.status == 'validee' %}
+  <div class="alert info">Inventaire validé : les écarts ont été appliqués au stock.</div>
+  {% endif %}
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Produit</th><th>Théorique</th><th>Compté</th><th>Écart</th><th>Valeur écart</th><th>Motif</th></tr></thead>
+        <tbody>
+          {% for line in session.lines %}
+          <tr>
+            <td>{{ line.product.name }} <code class="pill">{{ line.product.code }}</code><br><span class="pill">{{ line.product.base_unit.code }}</span></td>
+            <td>{{ line.qty_theorique | qty }}</td>
+            <td>
+              {% if session.status == 'validee' %}
+                {{ line.qty_comptee | qty }}
+              {% else %}
+                <input type="text" name="count_{{ line.id }}" value="{{ line.qty_comptee | qty }}" style="width:110px;padding:7px;border:1px solid var(--line);border-radius:8px">
+              {% endif %}
+            </td>
+            <td>
+              {% set e = line.ecart %}
+              {% if e and e != 0 %}
+                <span class="badge {{ 'green' if e > 0 else 'red' }}">{{ '+' if e > 0 }}{{ e | qty }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ line.ecart_valeur | num }} {{ line.product.currency }}</td>
+            <td>
+              {% if session.status == 'validee' %}
+                {{ line.reason or '—' }}
+              {% else %}
+                <input type="text" name="reason_{{ line.id }}" value="{{ line.reason or '' }}" placeholder="Motif si écart" style="width:160px;padding:7px;border:1px solid var(--line);border-radius:8px">
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if session.status != 'validee' %}
+    <div class="row mt-16">
+      <button class="btn" type="submit">Soumettre l'inventaire</button>
+    </div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Stock{% endblock %}
+{% block heading %}Stock{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card kpi"><span class="label">Valeur totale du stock</span><span class="value">{{ total_value | num }}</span><span class="foot">Par produit valorisé au coût moyen</span></div>
+  <div class="card kpi"><span class="label">Produits en rupture</span><span class="value {{ 'bad' if alerts.out_of_stock }}">{{ alerts.out_of_stock|length }}</span><span class="foot">À réapprovisionner</span></div>
+  <div class="card kpi"><span class="label">Stock bas</span><span class="value" style="color:var(--warning)">{{ alerts.low_stock|length }}</span><span class="foot">Sous le seuil d'alerte</span></div>
+</div>
+
+{% if alerts.out_of_stock or alerts.low_stock %}
+<div class="card">
+  <h2>Alertes de stock</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Produit</th><th>Stock</th><th>Seuil</th><th>État</th></tr></thead>
+      <tbody>
+        {% for p in alerts.out_of_stock %}
+        <tr><td>{{ p.name }} <code class="pill">{{ p.code }}</code></td><td>{{ p.stock_qty | qty }} {{ p.base_unit.code }}</td><td>{{ p.seuil_alerte | qty }}</td><td><span class="badge red">Rupture</span></td></tr>
+        {% endfor %}
+        {% for p in alerts.low_stock %}
+        <tr><td>{{ p.name }} <code class="pill">{{ p.code }}</code></td><td>{{ p.stock_qty | qty }} {{ p.base_unit.code }}</td><td>{{ p.seuil_alerte | qty }}</td><td><span class="badge amber">Stock bas</span></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if alerts.expiring %}
+<div class="card">
+  <h2>Péremptions proches (30 jours)</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Produit</th><th>Lot</th><th>Péremption</th><th>Quantité</th></tr></thead>
+      <tbody>
+        {% for b in alerts.expiring %}
+        <tr><td>{{ b.product.name }}</td><td>{{ b.lot_number or '—' }}</td><td>{{ b.expiry_date.strftime('%d/%m/%Y') }}</td><td>{{ b.qty_remaining | qty }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>État du stock</h2>
+      <p class="sub">{{ products|length }} produit(s) actif(s) — Total quantité : <strong>{{ (products | sum(attribute='stock_qty')) | qty }}</strong> — Valeur totale : <strong>{{ total_value | num }}</strong></p>
+    </div>
+    <div class="toolbar">
+      {% if current_user.has_permission(P.STOCK_MANAGE) %}<a href="{{ url_for('stock.entry') }}" class="btn sm">+ Demande d'entrée</a>{% endif %}
+    {% if current_user.has_permission(P.LOSS_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Déclarer une perte</a>{% endif %}
+    {% if current_user.has_permission(P.INVENTORY_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Inventaire</a>{% endif %}
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Code</th><th>Produit</th><th>Catégorie</th><th>Quantité en stock</th><th>Unité</th><th>Coût moyen / unité</th><th>Valeur du stock</th><th>Seuil</th><th>État</th><th></th></tr></thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td><code>{{ p.code }}</code></td>
+          <td><strong>{{ p.name }}</strong></td>
+          <td>{{ p.category.name if p.category else '—' }}</td>
+          <td class="num">{{ p.stock_qty | qty }}</td>
+          <td>{{ p.base_unit.code if p.base_unit else '—' }}</td>
+          <td class="num">{{ p.cost_avg | num }} {{ p.currency }}</td>
+          <td class="num">{{ p.stock_value | num }} {{ p.currency }}</td>
+          <td class="num">{{ p.seuil_alerte | qty }}</td>
+          <td>
+            {% if p.is_out_of_stock %}<span class="badge red">Rupture</span>
+            {% elif p.is_low_stock %}<span class="badge amber">Stock bas</span>
+            {% else %}<span class="badge green">OK</span>{% endif %}
+          </td>
+          <td><a class="btn ghost sm" href="{{ url_for('products.detail', product_id=p.id) }}">Fiche</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="muted">Aucun produit actif.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3"><strong>TOTAUX</strong></td>
+          <td class="num"><strong>{{ (products | sum(attribute='stock_qty')) | qty }}</strong></td>
+          <td></td>
+          <td></td>
+          <td class="num"><strong>{{ total_value | num }}</strong></td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Entrées de stock en attente{% endblock %}
+{% block heading %}Entrées de stock en attente{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Demandes d'entrée à valider</h2>
+      <p class="sub">Vérifiez les informations du produit, puis validez : le stock et le coût moyen pondéré sont mis à jour à la validation.</p>
+    </div>
+    <div class="toolbar" style="gap:8px; flex-wrap: wrap">
+      <div class="btn-group">
+        <a href="{{ url_for('stock.entry_pending', statut='en_attente') }}" class="btn sm {{ 'active' if filter_status == 'en_attente' else 'ghost' }}">En attente</a>
+        <a href="{{ url_for('stock.entry_pending', statut='validee') }}" class="btn sm {{ 'active' if filter_status == 'validee' else 'ghost' }}">Validées</a>
+        <a href="{{ url_for('stock.entry_pending', statut='rejetee') }}" class="btn sm {{ 'active' if filter_status == 'rejetee' else 'ghost' }}">Rejetées</a>
+        <a href="{{ url_for('stock.entry_pending', statut='toutes') }}" class="btn sm {{ 'active' if filter_status == 'toutes' else 'ghost' }}">Toutes</a>
+      </div>
+      <a href="{{ url_for('stock.entry') }}" class="btn sm">+ Nouvelle demande</a>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Référence</th>
+          <th>Date</th>
+          <th>Produit</th>
+          <th>Unité</th>
+          <th>Quantité</th>
+          <th>Coût unit.</th>
+          <th>Motif</th>
+          <th>N° lot</th>
+          <th>Expiration</th>
+          <th>Statut</th>
+          <th>Demandeur</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td><code>{{ e.reference }}</code></td>
+          <td>{{ e.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>
+            <strong>{{ e.product.name if e.product else '—' }}</strong>
+            <span class="muted">({{ e.product.code if e.product else '' }})</span>
+            {% if e.product %}
+            <a class="btn ghost sm" href="{{ url_for('products.detail', product_id=e.product.id) }}">Fiche</a>
+            {% endif %}
+          </td>
+          <td>{{ e.unit.label if e.unit else (e.product.base_unit.label if e.product and e.product.base_unit else '—') }}</td>
+          <td class="num">{{ e.qty_base | qty }} {{ e.product.base_unit.code if e.product and e.product.base_unit else '' }}</td>
+          <td class="num">{{ e.cost_unit | num }} {{ e.currency }}</td>
+          <td>{{ e.reason or '—' }}</td>
+          <td>{{ e.lot_number or '—' }}</td>
+          <td>
+            {% if e.expiry_date %}
+              <span class="badge {{ 'red' if e.expiry_date < now_date else 'green' }}">{{ e.expiry_date.strftime('%d/%m/%Y') }}</span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td><span class="badge {{ badges.get(e.status, 'gray') }}">{{ labels.get(e.status, e.status) }}</span></td>
+          <td>{{ e.created_by.username if e.created_by else '—' }}</td>
+          <td>
+            {% if e.status == 'en_attente' %}
+              {% if is_owner() %}
+              <div class="row" style="gap:6px; flex-wrap: wrap">
+                <button class="btn sm" type="button" onclick="openValidate({{ e.id }})">Valider</button>
+                <button class="btn ghost sm" type="button" onclick="openEdit({{ e.id }})">Modifier</button>
+                <form method="post" action="{{ url_for('stock.entry_delete', req_id=e.id) }}" onsubmit="return confirm('Supprimer définitivement cette demande en attente ?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="owner_password" value="">
+                  <button class="btn danger sm" type="submit">Supprimer</button>
+                </form>
+                <form method="post" action="{{ url_for('stock.entry_delete', req_id=e.id) }}" onsubmit="return confirm('Rejeter cette demande ?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="reason" value="Rejeté par le propriétaire">
+                  <button class="btn ghost sm" type="submit">Rejeter</button>
+                </form>
+              </div>
+              {% else %}
+              <span class="muted">En attente du propriétaire</span>
+              {% endif %}
+            {% elif e.status == 'validee' %}
+            <span class="muted">Validé par {{ e.validated_by.username if e.validated_by else '—' }}<br>{{ e.validated_at.strftime('%d/%m/%Y %H:%M') if e.validated_at else '' }}</span>
+            {% elif e.status == 'rejetee' %}
+            <span class="muted">Rejeté — {{ e.reject_reason or '' }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="12" class="muted">Aucune demande en attente.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if is_owner() %}
+<div class="modal" id="validate_modal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Valider l'entrée en stock</h3>
+      <button type="button" class="btn ghost sm" onclick="closeValidate()">×</button>
+    </div>
+    <form method="post" id="validate_form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <div class="field full">
+          <label>Produit</label>
+          <div id="v_product" style="font-weight:700"></div>
+        </div>
+        <div class="field">
+          <label>Quantité</label>
+          <div id="v_qty" style="font-weight:700"></div>
+        </div>
+        <div class="field">
+          <label>Coût unitaire</label>
+          <div id="v_cost" style="font-weight:700"></div>
+        </div>
+        <div class="field">
+          <label>Lot</label>
+          <input type="text" id="v_lot" name="lot_number">
+        </div>
+        <div class="field">
+          <label>Expiration</label>
+          <input type="date" id="v_expiry" name="expiry_date">
+        </div>
+        <div class="field full">
+          <label>Notes de validation</label>
+          <input type="text" id="v_notes" name="notes" placeholder="Contrôle physique effectué">
+        </div>
+        <div class="field full">
+          <label for="owner_password">Mot de passe propriétaire (sécurité)</label>
+          <input type="password" id="owner_password" name="owner_password" required autocomplete="current-password">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn ghost" onclick="closeValidate()">Annuler</button>
+        <button type="submit" class="btn">Valider et entrer en stock</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="edit_modal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Modifier la demande en attente</h3>
+      <button type="button" class="btn ghost sm" onclick="closeEdit()">×</button>
+    </div>
+    <form method="post" id="edit_form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="owner_password" value="">
+      <div class="modal-body">
+        <div class="field full">
+          <label>Produit</label>
+          <div id="m_title" style="font-weight:700"></div>
+        </div>
+        <div class="field">
+          <label for="m_qty">Quantité (unité de base)</label>
+          <input type="text" id="m_qty" name="qty_base" required>
+        </div>
+        <div class="field">
+          <label for="m_cost">Coût unitaire</label>
+          <input type="text" id="m_cost" name="cost_unit" required>
+        </div>
+        <div class="field">
+          <label for="m_lot_edit">N° de lot</label>
+          <input type="text" id="m_lot_edit" name="lot_number">
+        </div>
+        <div class="field">
+          <label for="m_expiry_edit">Date d'expiration</label>
+          <input type="date" id="m_expiry_edit" name="expiry_date">
+        </div>
+        <div class="field full">
+          <label for="m_reason_edit">Motif / Référence</label>
+          <input type="text" id="m_reason_edit" name="reason">
+        </div>
+        <div class="field full">
+          <label for="m_notes_edit">Notes</label>
+          <input type="text" id="m_notes_edit" name="notes" placeholder="Motif de la modification">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn ghost" onclick="closeEdit()">Annuler</button>
+        <button type="submit" class="btn">Enregistrer les modifications</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const ENTRIES = {
+  {% for e in entries %}
+  "{{ e.id }}": {
+    product: {{ (e.product.name if e.product else '')|tojson }},
+    code: {{ (e.product.code if e.product else '')|tojson }},
+    qty: {{ e.qty_base|string|tojson }},
+    unit: {{ (e.product.base_unit.code if e.product and e.product.base_unit else '')|tojson }},
+    cost: {{ e.cost_unit|string|tojson }},
+    currency: {{ e.currency|tojson }},
+    lot: {{ (e.lot_number or '')|tojson }},
+    expiry: {{ (e.expiry_date.strftime('%Y-%m-%d') if e.expiry_date else '')|tojson }},
+    reason: {{ (e.reason or '')|tojson }}
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+};
+
+function openValidate(id) {
+  const e = ENTRIES[id];
+  if (!e) return;
+  document.getElementById('v_product').textContent = e.product + ' (' + e.code + ')';
+  document.getElementById('v_qty').textContent = e.qty + ' ' + e.unit;
+  document.getElementById('v_cost').textContent = e.cost + ' ' + e.currency;
+  document.getElementById('v_lot').value = e.lot;
+  document.getElementById('v_expiry').value = e.expiry;
+  document.getElementById('v_notes').value = 'Contrôle physique effectué';
+  document.getElementById('validate_form').action = '/stock/entrees-attente/' + id + '/valider';
+  document.getElementById('validate_modal').classList.add('show');
+}
+
+function closeValidate() {
+  document.getElementById('validate_modal').classList.remove('show');
+}
+
+function openEdit(id) {
+  const e = ENTRIES[id];
+  if (!e) return;
+  document.getElementById('m_title').textContent = e.product + ' (' + e.code + ')';
+  document.getElementById('m_qty').value = e.qty;
+  document.getElementById('m_cost').value = e.cost;
+  document.getElementById('m_lot_edit').value = e.lot;
+  document.getElementById('m_expiry_edit').value = e.expiry;
+  document.getElementById('m_reason_edit').value = e.reason;
+  document.getElementById('m_notes_edit').value = 'Modification après contrôle physique';
+  document.getElementById('edit_form').action = '/stock/entrees-attente/' + id + '/modifier';
+  document.getElementById('edit_modal').classList.add('show');
+}
+
+function closeEdit() {
+  document.getElementById('edit_modal').classList.remove('show');
+}
+</script>
+{% endblock %}

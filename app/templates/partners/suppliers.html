@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Fournisseurs{% endblock %}
+{% block heading %}Fournisseurs{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Fournisseurs</h2>
+    <p class="sub">{{ suppliers|length }} fournisseur(s).</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Nom</th><th>Contact</th><th>Devise</th><th>Conditions</th><th>Etat</th><th></th></tr></thead>
+        <tbody>
+          {% for s in suppliers %}
+          <tr>
+            <td>{{ s.name }}</td>
+            <td>{{ s.contact or '—' }}</td>
+            <td><span class="pill">{{ s.default_currency }}</span></td>
+            <td>{{ s.terms or '—' }}</td>
+            <td>{% if s.active %}<span class="badge green">Actif</span>{% else %}<span class="badge gray">Inactif</span>{% endif %}</td>
+            <td>{% if current_user.has_permission(P.PARTNERS_MANAGE) %}<a class="btn ghost sm" href="{{ url_for('partners.edit_supplier', supplier_id=s.id) }}">Modifier</a>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="muted">Aucun fournisseur.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if current_user.has_permission(P.PARTNERS_MANAGE) %}
+  <div class="card">
+    <h2>Nouveau fournisseur</h2>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="name">Nom</label><input type="text" id="name" name="name" required></div>
+      <div class="field"><label for="contact">Contact</label><input type="text" id="contact" name="contact"></div>
+      <div class="field">
+        <label for="default_currency">Devise usuelle</label>
+        <select id="default_currency" name="default_currency">{% for cur in currencies %}<option value="{{ cur }}">{{ cur }}</option>{% endfor %}</select>
+      </div>
+      <div class="field"><label for="terms">Conditions</label><input type="text" id="terms" name="terms" placeholder="Ex. paiement 30 jours"></div>
+      <button class="btn" type="submit">Creer</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

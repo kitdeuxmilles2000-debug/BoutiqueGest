@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+{% block title %}Entrée de stock{% endblock %}
+{% block heading %}Entrée de stock{% endblock %}
+
+{% block content %}
+<style>
+  .entry-layout { display: grid; grid-template-columns: 1fr 380px; gap: 18px; align-items: start; }
+  @media (max-width: 1080px) { .entry-layout { grid-template-columns: 1fr; } }
+  .entry-form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 16px; }
+  .entry-form .field { margin-bottom: 0; }
+  .entry-form .field.full { grid-column: 1 / -1; }
+  .entry-form .section-title { grid-column: 1 / -1; margin: 8px 0 2px; font-size: .95rem; font-weight: 800; }
+  .entry-form .section-sub { grid-column: 1 / -1; margin: -2px 0 6px; color: var(--muted); font-size: .83rem; }
+  .prod-preview { position: sticky; top: 78px; }
+  .prod-preview .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+  .prod-preview .info-cell { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+  .prod-preview .info-cell .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .prod-preview .info-cell .value { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .prod-preview .unit-item { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
+  .toggle-new { border: 1px dashed #94a3b8; border-radius: 10px; padding: 10px 12px; background: #f8fafc; }
+  .prod-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 8px; margin-top: 10px; max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fbfcfe; }
+  .prod-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; width: 100%; border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 9px 11px; cursor: pointer; font: inherit; }
+  .prod-item:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+  .prod-item.selected { border-color: var(--primary); background: #eff6ff; box-shadow: 0 0 0 2px rgba(37, 99, 235, .18); }
+  .prod-item .pi-main { min-width: 0; }
+  .prod-item .pi-name { font-weight: 700; font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prod-item .pi-meta { font-size: .74rem; color: var(--muted); }
+  .prod-item .pi-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .picker-summary { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+  .badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .badge.green { background: #dcfce7; color: #166534; }
+  .badge.orange { background: #ffedd5; color: #9a3412; }
+  .badge.red { background: #fee2e2; color: #991b1b; }
+  .badge.grey { background: #e2e8f0; color: #334155; }
+  .info-banner { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .info-banner .title { font-weight: 800; }
+  .info-banner .sub { color: var(--muted); font-size: .86rem; }
+  .mod-block { grid-column: 1 / -1; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px; display: none; }
+  .mod-block.active { display: block; }
+  .mod-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 16px; }
+</style>
+
+<div class="entry-layout">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Demande d'entrée en stock</h2>
+        <p class="sub">Soumission en attente de validation. Le stock et le coût moyen ne bougent qu'après validation par le propriétaire.</p>
+      </div>
+    </div>
+
+    <form method="post" class="entry-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="field full">
+        <label for="product_search">Produit à entrer en stock</label>
+        <input type="hidden" id="product_id" name="product_id" value="">
+        <input type="search" id="product_search" placeholder="Rechercher un produit (nom ou code)…" oninput="filterProducts()" autocomplete="off">
+        <div class="picker-summary" id="picker_summary"></div>
+        <div class="prod-picker" id="product_picker">
+          {% for p in products %}
+          {% set pend = pending_qty.get(p.id, 0) %}
+          {% set stock = p.stock_qty|default(0) %}
+          <button type="button" class="prod-item" data-id="{{ p.id }}"
+                  data-search="{{ (p.name ~ ' ' ~ p.code ~ ' ' ~ (p.base_unit.label if p.base_unit else ''))|lower }}"
+                  onclick="selectProduct({{ p.id }})">
+            <div class="pi-main">
+              <div class="pi-name">{{ p.name }}</div>
+              <div class="pi-meta">{{ p.code }} · unité {{ p.base_unit.label if p.base_unit else '—' }}</div>
+            </div>
+            <div class="pi-badges">
+              {% if not p.active %}<span class="badge grey">Inactif</span>{% endif %}
+              {% if stock > 0 %}
+                <span class="badge green">En stock · {{ stock|qty }}</span>
+              {% elif stock < 0 %}
+                <span class="badge red">Rupture · {{ stock|qty }}</span>
+              {% else %}
+                <span class="badge grey">Sans stock</span>
+              {% endif %}
+              {% if pend > 0 %}<span class="badge orange">En attente · {{ pend|qty }}</span>{% endif %}
+            </div>
+          </button>
+          {% endfor %}
+        </div>
+        <p class="hint">Tous les produits sont listés avec leur état. Un produit « Sans stock » ou « En attente » n'est vendable qu'après validation d'une entrée de stock.</p>
+      </div>
+
+      <div class="info-banner" id="auto_info" style="display:none">
+        <div class="title">Produit existant — données reprises de la fiche</div>
+        <div class="sub">Unité de base, devise, unités de vente, seuil et péremption/durée de conservation sont déjà définis. <strong>Indiquez uniquement la quantité reçue</strong>. Toute correction ne se fait qu'en cochant « Apporter des modifications ».</div>
+      </div>
+
+      <input type="hidden" id="unit_id" name="unit_id" value="">
+      <input type="hidden" id="cost" name="cost" value="0">
+      <input type="hidden" id="lot_number" name="lot_number" value="">
+      <input type="hidden" id="expiry_date" name="expiry_date" value="">
+      <input type="hidden" id="reason" name="reason" value="Réception depuis fiche produit">
+
+      <div class="field full" id="field_qty" style="display:none">
+        <label for="quantity">Quantité reçue *</label>
+        <input type="text" id="quantity" name="quantity" required placeholder="Quantité dans l'unité de base du produit">
+      </div>
+      <div class="field" id="field_supplier">
+        <label for="supplier_id">Fournisseur (facultatif)</label>
+        <select id="supplier_id" name="supplier_id">
+          <option value="">— Aucun —</option>
+          {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div class="field full" id="mod_toggle" style="display:none">
+        <label><input type="checkbox" id="allow_mod" onchange="toggleMod()"> Apporter des modifications (à n'utiliser qu'en cas de correction après contrôle)</label>
+      </div>
+
+      <div class="mod-block" id="mod_block">
+        <div class="mod-grid">
+          <div class="field">
+            <label for="m_lot_number">N° de lot</label>
+            <input type="text" id="m_lot_number" name="m_lot_number">
+          </div>
+          <div class="field">
+            <label for="m_expiry_date">Date de péremption / expiration</label>
+            <input type="date" id="m_expiry_date" name="m_expiry_date">
+          </div>
+          <div class="field">
+            <label for="m_cost">Coût unitaire modifié (par unité saisie)</label>
+            <input type="text" id="m_cost" name="m_cost" placeholder="Laisser vide pour conserver celui de la fiche">
+          </div>
+          <div class="field">
+            <label for="m_reason">Motif des modifications *</label>
+            <input type="text" id="m_reason" name="m_reason" placeholder="Obligatoire si modifications">
+          </div>
+        </div>
+        <p class="hint">Toute modification doit être justifiée. Les valeurs initiales sont celles du produit.</p>
+      </div>
+
+      {% if can_create %}
+      <div class="section-title">Créer un nouveau produit (facultatif)</div>
+      <div class="section-sub">Renseignez les informations du produit, son unité, ses prix de vente et la quantité reçue.</div>
+      <div class="field full toggle-new">
+        <label><input type="checkbox" id="toggle_new_product" onchange="toggleNewProduct()"> Créer un nouveau produit et soumettre une demande d'entrée</label>
+      </div>
+
+      <div id="new_product_block" style="display:none; grid-column:1/-1;">
+        <div class="entry-form" style="gap:10px 14px;">
+          <div class="field">
+            <label for="new_product_name">Désignation</label>
+            <input type="text" id="new_product_name" name="new_product_name">
+          </div>
+          <div class="field">
+            <label for="new_code">Code (auto si vide)</label>
+            <input type="text" id="new_code" name="new_code" placeholder="Généré automatiquement">
+          </div>
+          <div class="field">
+            <label for="new_base_unit_id">Unité de stock</label>
+            <select id="new_base_unit_id" name="new_base_unit_id">
+              <option value="">— Choisir —</option>
+              {% for u in units %}<option value="{{ u.id }}">{{ u.label }} ({{ u.code }})</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_category_id">Catégorie</label>
+            <select id="new_category_id" name="new_category_id">
+              <option value="">— Aucune —</option>
+              {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_kind">Nature</label>
+            <select id="new_kind" name="new_kind">
+              {% for code in ['boisson', 'eau', 'lait', 'accessoire', 'autre'] %}<option value="{{ code }}">{{ code|capitalize }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_currency">Devise</label>
+            <select id="new_currency" name="new_currency"><option value="CDF">CDF</option><option value="USD">USD</option></select>
+          </div>
+          <div class="field">
+            <label for="new_qty_initial">Quantité reçue *</label>
+            <input type="text" id="new_qty_initial" name="new_qty_initial" value="" required>
+          </div>
+          <div class="field">
+            <label for="new_cost_avg">Coût unitaire d'achat *</label>
+            <input type="text" id="new_cost_avg" name="new_cost_avg" value="0" oninput="calcNewCost()">
+          </div>
+          <div class="field">
+            <label for="new_total_achat">Montant total (facultatif)</label>
+            <input type="text" id="new_total_achat" placeholder="Total facture" oninput="calcNewCostFromTotal()">
+          </div>
+          <div class="field">
+            <label>Coût moyen calculé</label>
+            <input type="text" id="new_cost_calc" readonly value="0">
+            <p class="hint">Calcul automatique : Montant total ÷ Quantité.</p>
+          </div>
+          <div class="field">
+            <label for="new_prix_vente">Prix de vente (unité de base)</label>
+            <input type="text" id="new_prix_vente" name="new_prix_vente" value="0">
+          </div>
+          <div class="field">
+            <label for="new_unite_vente_id">Unité de vente (verre, bidon…)</label>
+            <select id="new_unite_vente_id" name="new_unite_vente_id">
+              <option value="">— Aucune —</option>
+              {% for u in units %}<option value="{{ u.id }}">{{ u.label }} ({{ u.code }})</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_facteur">Facteur vers l'unité de base</label>
+            <input type="text" id="new_facteur" name="new_facteur" value="1">
+          </div>
+          <div class="field">
+            <label for="new_prix_vente_unite">Prix de vente unité de vente</label>
+            <input type="text" id="new_prix_vente_unite" name="new_prix_vente_unite" value="0">
+          </div>
+          <div class="field">
+            <label for="new_seuil_alerte">Seuil d'alerte</label>
+            <input type="text" id="new_seuil_alerte" name="new_seuil_alerte" value="0">
+          </div>
+          <div class="field">
+            <label for="new_expiry_date">Date d'expiration par défaut</label>
+            <input type="date" id="new_expiry_date" name="new_expiry_date">
+          </div>
+          <div class="field">
+            <label for="new_qty_initial">Quantité à entrer en stock *</label>
+            <input type="text" id="new_qty_initial" name="new_qty_initial" value="0" required>
+            <p class="hint">Sera soumise en demande d'entrée à valider par le propriétaire.</p>
+          </div>
+          <div class="field full row" style="gap:14px">
+            <label><input type="checkbox" name="new_is_perishable"> Périssable</label>
+            <label><input type="checkbox" name="new_track_lot"> Suivi par lot</label>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="field full row">
+        <button type="submit" class="btn">Soumettre à validation</button>
+        <a href="{{ url_for('stock.entry_pending') }}" class="btn ghost">Voir les entrées à valider</a>
+        <a href="{{ url_for('stock.index') }}" class="btn ghost">Annuler</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card prod-preview">
+    <div class="card-head">
+      <div>
+        <h2>Fiche produit</h2>
+        <p class="sub">Informations reprises automatiquement.</p>
+      </div>
+    </div>
+    <div>
+      <div style="font-weight:800;font-size:1.02rem" id="pv_name">— Aucun produit sélectionné —</div>
+      <div class="muted" id="pv_code"></div>
+    </div>
+    <div class="info-grid">
+      <div class="info-cell"><span class="label">Unité de stock</span><span class="value" id="pv_base_unit">—</span></div>
+      <div class="info-cell"><span class="label">Coût moyen</span><span class="value" id="pv_cost">—</span></div>
+      <div class="info-cell"><span class="label">Stock actuel</span><span class="value" id="pv_stock">—</span></div>
+      <div class="info-cell"><span class="label">Valeur stock</span><span class="value" id="pv_value">—</span></div>
+      <div class="info-cell"><span class="label">Périssable</span><span class="value" id="pv_perishable">—</span></div>
+      <div class="info-cell"><span class="label">Péremption</span><span class="value" id="pv_expiry">—</span></div>
+      <div class="info-cell"><span class="label">En attente de validation</span><span class="value" id="pv_pending">—</span></div>
+      <div class="info-cell"><span class="label">État</span><span class="value" id="pv_state">—</span></div>
+    </div>
+    <div id="pv_units" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<script>
+const PRODUCTS = {
+  {% for p in products %}
+  "{{ p.id }}": {
+    id: {{ p.id }},
+    name: {{ p.name|tojson }},
+    code: {{ p.code|tojson }},
+    base_unit: {{ (p.base_unit.label if p.base_unit else '')|tojson }},
+    base_unit_code: {{ (p.base_unit.code if p.base_unit else '')|tojson }},
+    base_unit_id: {{ p.base_unit_id }},
+    cost_avg: {{ p.cost_avg|default(0)|string|tojson }},
+    currency: {{ p.currency|tojson }},
+    stock: {{ (p.stock_qty|default(0)|float) }},
+    value: {{ p.stock_value|default(0)|string|tojson }},
+    is_perishable: {{ 'true' if p.is_perishable else 'false' }},
+    track_lot: {{ 'true' if p.track_lot else 'false' }},
+    default_expiry: {{ (p.default_expiry_date.strftime('%Y-%m-%d') if p.default_expiry_date else '')|tojson }},
+    shelf_life_days: {{ (p.shelf_life_days if p.shelf_life_days else '')|tojson }},
+    seuil: {{ p.seuil_alerte|default(0)|string|tojson }},
+    pending: {{ (pending_qty.get(p.id, 0)|qty)|string|tojson }},
+    units: [
+      {"id": {{ p.base_unit_id }}, "label": {{ (p.base_unit.label if p.base_unit else '')|tojson }}, "factor": "1", "base": true},
+      {% for pu in p.selling_units %}{% if pu.unit_id != p.base_unit_id %}{"id": {{ pu.unit_id }}, "label": {{ pu.unit.label|tojson }}, "factor": {{ pu.factor|string|tojson }}, "base": false},{% endif %}{% endfor %}
+    ]
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+};
+
+function selectProduct(pid) {
+  document.getElementById('product_id').value = pid;
+  document.querySelectorAll('#product_picker .prod-item').forEach(function (el) {
+    el.classList.toggle('selected', el.dataset.id === String(pid));
+  });
+  const p = PRODUCTS[pid];
+  document.getElementById('auto_info').style.display = 'flex';
+  document.getElementById('mod_toggle').style.display = 'block';
+  document.getElementById('field_supplier').style.display = 'block';
+  document.getElementById('field_qty').style.display = 'block';
+  if (p) {
+    document.getElementById('unit_id').value = p.base_unit_id || '';
+    document.getElementById('cost').value = p.cost_avg || 0;
+    document.getElementById('lot_number').value = '';
+    document.getElementById('expiry_date').value = p.default_expiry || '';
+    document.getElementById('reason').value = 'Réception depuis fiche produit';
+  }
+  document.getElementById('allow_mod').checked = false;
+  document.getElementById('mod_block').classList.remove('active');
+  document.getElementById('m_lot_number').value = '';
+  document.getElementById('m_expiry_date').value = p ? (p.default_expiry || '') : '';
+  document.getElementById('m_cost').value = '';
+  document.getElementById('m_reason').value = '';
+  onProductChange();
+}
+
+function filterProducts() {
+  const q = (document.getElementById('product_search').value || '').trim().toLowerCase();
+  let visible = 0;
+  document.querySelectorAll('#product_picker .prod-item').forEach(function (el) {
+    const ok = !q || (el.dataset.search || '').indexOf(q) !== -1;
+    el.style.display = ok ? '' : 'none';
+    if (ok) visible += 1;
+  });
+  const sum = document.getElementById('picker_summary');
+  sum.textContent = q ? (visible + ' produit(s) trouvé(s)') : (visible + ' produit(s) au total');
+}
+
+function onProductChange() {
+  const pid = document.getElementById('product_id').value;
+  const p = PRODUCTS[pid];
+  const unitSel = document.getElementById('unit_id');
+  unitSel.innerHTML = '';
+  if (!p) {
+    document.getElementById('pv_name').textContent = '— Aucun produit sélectionné —';
+    document.getElementById('pv_code').textContent = '';
+    ['pv_base_unit','pv_cost','pv_stock','pv_value','pv_perishable','pv_expiry','pv_pending','pv_state'].forEach(function(id){
+      document.getElementById(id).textContent = '—';
+    });
+    document.getElementById('pv_units').innerHTML = '';
+    return;
+  }
+  p.units.forEach(function (u) {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.label + (u.base ? ' (base)' : '');
+    unitSel.appendChild(opt);
+  });
+  document.getElementById('pv_name').textContent = p.name;
+  document.getElementById('pv_code').textContent = p.code;
+  document.getElementById('pv_base_unit').textContent = p.base_unit + ' (' + p.base_unit_code + ')';
+  document.getElementById('pv_cost').textContent = p.cost_avg + ' ' + p.currency;
+  document.getElementById('pv_stock').textContent = p.stock + ' ' + p.base_unit_code;
+  document.getElementById('pv_value').textContent = p.value + ' ' + p.currency;
+  document.getElementById('pv_perishable').textContent = p.is_perishable ? 'Oui' : 'Non';
+  document.getElementById('pv_expiry').textContent = p.is_perishable ? (p.default_expiry || (p.shelf_life_days ? p.shelf_life_days + ' jours' : 'À renseigner')) : '—';
+  document.getElementById('pv_pending').textContent = p.pending;
+  document.getElementById('pv_state').textContent = p.stock > 0 ? 'En stock' : (p.stock < 0 ? 'Rupture' : 'Sans stock');
+  document.getElementById('cost').value = p.cost_avg;
+  document.getElementById('unit_id').value = p.base_unit_id || '';
+  document.getElementById('lot_number').value = '';
+  const sel = document.getElementById('expiry_date');
+  sel.value = p.default_expiry || '';
+  document.getElementById('reason').value = 'Réception depuis fiche produit';
+  if (p.default_expiry) {
+    document.getElementById('m_expiry_date').value = p.default_expiry;
+  }
+
+  let html = '<div style="font-weight:700;font-size:.85rem">Unités de vente</div>';
+  p.units.forEach(function (u) {
+    html += '<div class="unit-item"><div><div class="info"><span class="name" style="font-weight:600">' + u.label + '</span></div>'
+         + '<span class="meta" style="font-size:.78rem;color:var(--muted)">Facteur ' + u.factor + '</span></div>'
+         + '<span class="price">' + (u.base ? p.cost_avg : '—') + '</span></div>';
+  });
+  document.getElementById('pv_units').innerHTML = html;
+}
+
+function onUnitChange() {
+  const pid = document.getElementById('product_id').value;
+  const p = PRODUCTS[pid];
+  if (!p) return;
+  const uid = document.getElementById('unit_id').value;
+  const u = p.units.filter(function(x){ return String(x.id) === String(uid); })[0];
+  if (u && u.base) {
+    document.getElementById('cost').value = p.cost_avg;
+  }
+}
+
+function toggleMod() {
+  const on = document.getElementById('allow_mod').checked;
+  document.getElementById('mod_block').classList.toggle('active', on);
+}
+
+function toggleNewProduct() {
+  const on = document.getElementById('toggle_new_product').checked;
+  document.getElementById('new_product_block').style.display = on ? 'block' : 'none';
+  document.getElementById('product_id').disabled = on;
+  document.getElementById('product_search').disabled = on;
+  document.getElementById('product_picker').style.opacity = on ? '0.45' : '1';
+  document.getElementById('product_picker').style.pointerEvents = on ? 'none' : 'auto';
+  document.getElementById('auto_info').style.display = on ? 'none' : (document.getElementById('product_id').value ? 'flex' : 'none');
+  document.getElementById('mod_toggle').style.display = on ? 'none' : (document.getElementById('product_id').value ? 'block' : 'none');
+  document.getElementById('field_supplier').style.display = on ? 'block' : (document.getElementById('product_id').value ? 'block' : 'none');
+  document.getElementById('field_qty').style.display = on ? 'block' : (document.getElementById('product_id').value ? 'block' : 'none');
+  document.getElementById('mod_block').classList.remove('active');
+  document.getElementById('allow_mod').checked = false;
+}
+
+function calcNewCost() {
+  const q = parseFloat((document.getElementById('new_qty_initial').value || '0').replace(',', '.')) || 0;
+  const t = parseFloat((document.getElementById('new_total_achat').value || '0').replace(',', '.')) || 0;
+  if (q > 0 && t > 0) {
+    const c = t / q;
+    document.getElementById('new_cost_calc').value = c.toFixed(2);
+    document.getElementById('new_cost_avg').value = c.toFixed(2);
+  } else {
+    document.getElementById('new_cost_calc').value = document.getElementById('new_cost_avg').value;
+  }
+}
+
+function calcNewCostFromTotal() {
+  calcNewCost();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  filterProducts();
+});
+</script>
+{% endblock %}

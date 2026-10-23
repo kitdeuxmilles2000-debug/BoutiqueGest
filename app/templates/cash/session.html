@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Caisse #{{ session.id }}{% endblock %}
+{% block heading %}Caisse · {{ session.register.name }} ({{ session.currency }}){% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>{{ session.register.name }}
+        {% if session.status == 'validee' %}<span class="badge green">Validee</span>
+        {% elif session.status == 'soumise' %}<span class="badge amber">Soumise</span>
+        {% else %}<span class="badge gray">Ouverte</span>{% endif %}
+      </h2>
+      <p class="sub">Vendeur : {{ session.vendeur.full_name }} · ouverte le {{ session.opened_at.strftime('%d/%m/%Y %H:%M') }}
+        {% if session.closed_at %} · cloturee le {{ session.closed_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+        {% if session.validated_by %} · validee par {{ session.validated_by.full_name }}{% endif %}</p>
+    </div>
+    <div class="row">
+      {% if current_user.has_permission(P.SALES_CREATE) and session.is_open %}
+      <a href="{{ url_for('pos.index') }}" class="btn">Vendre</a>
+      {% endif %}
+      {% if session.status == 'soumise' and current_user.has_permission(P.CASH_VALIDATE) %}
+      <form method="post" action="{{ url_for('cash.validate_session', session_id=session.id) }}" onsubmit="return confirm('Valider cette cloture ?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn">Valider la cloture</button>
+      </form>
+      {% endif %}
+      <a href="{{ url_for('cash.index') }}" class="btn ghost">Retour</a>
+    </div>
+  </div>
+
+  <div class="grid cols-4">
+    <div class="kpi"><span class="label">Fond initial</span><span class="value">{{ session.solde_initial | num }}</span><span class="foot">{{ session.currency }}</span></div>
+    <div class="kpi"><span class="label">Theorique</span><span class="value">{{ theorique | num }}</span><span class="foot">initial + entrees − sorties</span></div>
+    <div class="kpi"><span class="label">Compte</span><span class="value">{{ session.solde_compte | num if session.solde_compte is not none else '—' }}</span><span class="foot">{{ session.currency }}</span></div>
+    <div class="kpi"><span class="label">Ecart</span><span class="value {{ 'bad' if session.ecart != 0 else 'good' }}">{{ session.ecart | num }}</span><span class="foot">{{ session.motif_ecart or '—' }}</span></div>
+  </div>
+</div>
+
+{% if session.is_open and current_user.has_permission(P.CASH_OPEN) %}
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Mouvement de caisse</h2>
+    <p class="sub">Apport (ajout) ou retrait (prelevement) avec motif.</p>
+    <form method="post" action="{{ url_for('cash.add_movement', session_id=session.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="kind">Type</label>
+        <select id="kind" name="kind">
+          <option value="apport">Apport</option>
+          <option value="retrait">Retrait</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="amount">Montant</label>
+        <input type="text" id="amount" name="amount" required>
+      </div>
+      <div class="field">
+        <label for="reason">Motif</label>
+        <input type="text" id="reason" name="reason">
+      </div>
+      <button class="btn" type="submit">Enregistrer</button>
+    </form>
+  </div>
+
+  {% if current_user.has_permission(P.CASH_CLOSE) %}
+  <div class="card">
+    <h2>Cloturer la caisse</h2>
+    <p class="sub">Comptez le tiroir et saisissez le montant reel.</p>
+    <form method="post" action="{{ url_for('cash.close_session', session_id=session.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="solde_compte">Montant compte ({{ session.currency }})</label>
+        <input type="text" id="solde_compte" name="solde_compte" required>
+      </div>
+      <div class="field">
+        <label for="motif_ecart">Motif si ecart</label>
+        <input type="text" id="motif_ecart" name="motif_ecart">
+      </div>
+      <button class="btn" type="submit">Soumettre la cloture</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Mouvements</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Motif</th><th>Par</th></tr></thead>
+      <tbody>
+        {% for m in session.movements %}
+        <tr>
+          <td>{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ labels.get(m.kind, m.kind) }}</td>
+          <td style="font-weight:700;color:{{ 'var(--success)' if m.amount >= 0 else 'var(--danger)' }}">{{ '+' if m.amount >= 0 }}{{ m.amount | num }}</td>
+          <td>{{ m.reason or '—' }}</td>
+          <td>{{ m.user.username if m.user else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Aucun mouvement.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Ventes de la session</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Numero</th><th>Heure</th><th>Total</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {% for s in session.sales %}
+        <tr>
+          <td>{{ s.numero }}</td>
+          <td>{{ s.created_at.strftime('%H:%M') }}</td>
+          <td>{{ s.montant_total | num }} {{ s.currency }}</td>
+          <td>{{ s.status }}</td>
+          <td><a class="btn ghost sm" href="{{ url_for('sales.detail', sale_id=s.id) }}">Recu</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Aucune vente.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

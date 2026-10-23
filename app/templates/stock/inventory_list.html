@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Inventaires{% endblock %}
+{% block heading %}Inventaires{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Sessions d'inventaire</h2>
+    <p class="sub">{{ sessions|length }} session(s).</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Référence</th><th>Périmètre</th><th>Statut</th><th>Écarts</th><th></th></tr></thead>
+        <tbody>
+          {% for s in sessions %}
+          <tr>
+            <td><strong>{{ s.reference }}</strong><br><span class="pill">{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</span></td>
+            <td>{{ s.scope or '—' }}</td>
+            <td>
+              {% if s.status == 'validee' %}<span class="badge green">Validée</span>
+              {% elif s.status == 'soumise' %}<span class="badge amber">Soumise</span>
+              {% else %}<span class="badge gray">Ouverte</span>{% endif %}
+            </td>
+            <td>{% if s.has_gaps %}<span class="badge amber">Oui</span>{% else %}<span class="badge green">Aucun</span>{% endif %}</td>
+            <td><a class="btn ghost sm" href="{{ url_for('stock.inventory_detail', session_id=s.id) }}">Ouvrir</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">Aucune session.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Nouvelle session</h2>
+    <p class="sub">Les quantités théoriques sont figées au moment de la création.</p>
+    <form method="post" action="{{ url_for('stock.inventory_new') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="scope">Périmètre</label>
+        <input type="text" id="scope" name="scope" value="Tout le stock">
+      </div>
+      <div class="field">
+        <label for="notes">Notes (facultatif)</label>
+        <textarea id="notes" name="notes" rows="2"></textarea>
+      </div>
+      <button class="btn" type="submit">Créer la session</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

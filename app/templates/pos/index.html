@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}Point de vente{% endblock %}
+{% block heading %}Point de vente · {{ session.register.name }} ({{ currency }}){% endblock %}
+
+{% block content %}
+<style>
+  .pos-wrap { display: grid; grid-template-columns: 1fr 380px; gap: 16px; align-items: start; }
+  @media (max-width: 1080px) { .pos-wrap { grid-template-columns: 1fr; } }
+  .pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .pos-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 1px 1px rgba(15,23,42,.02);
+  }
+  .pos-card:hover { border-color: #c7d2fe; background: #f8faff; }
+  .pos-card .name { font-weight: 700; font-size: .9rem; line-height: 1.3; }
+  .pos-card .meta { display: flex; align-items: center; justify-content: space-between; font-size: .76rem; color: var(--muted); }
+  .pos-card .units { display: flex; flex-direction: column; gap: 6px; }
+  .pos-card .unit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    font-size: .86rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+  }
+  .pos-card .unit-btn:hover { background: var(--primary-050); border-color: #c7d2fe; color: var(--primary); }
+  .pos-card .unit-btn .price { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pos-card .unit-btn:hover .price { color: var(--primary); }
+
+  .invoice { position: sticky; top: 78px; display: flex; flex-direction: column; }
+  .invoice-head { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .invoice-head .title { font-weight: 800; font-size: .98rem; letter-spacing: -.01em; }
+  .invoice-head .meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: .78rem; color: var(--muted); }
+  .invoice-table-wrap { border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; }
+  .invoice-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  .invoice-table thead th {
+    background: #eef2f7;
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #334155;
+    padding: 7px 10px;
+    text-align: left;
+    border-bottom: 2px solid #94a3b8;
+  }
+  .invoice-table tbody td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  .invoice-table tbody tr:nth-child(even) { background: #f8fafc; }
+  .invoice-table .line-name { font-weight: 600; }
+  .invoice-table .line-unit { font-size: .76rem; color: var(--muted); }
+  .invoice-table .qty-cell { white-space: nowrap; }
+  .invoice-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .qty-pill { display: inline-flex; align-items: center; gap: 6px; }
+  .qty-btn {
+    width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line);
+    background: #fff; font-weight: 700; line-height: 1; padding: 0; cursor: pointer;
+  }
+  .qty-btn:hover { background: var(--primary-050); border-color: #c7d2fe; }
+  .invoice-empty { text-align: center; color: var(--muted); padding: 16px 10px; font-size: .84rem; }
+
+  .invoice-section { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .invoice-row { display: flex; align-items: center; justify-content: space-between; font-size: .86rem; }
+  .invoice-row.sub { color: var(--muted); }
+  .invoice-total {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 12px; margin-top: 4px; border-top: 2px solid #cbd5e1;
+    font-weight: 800; font-size: 1.1rem;
+  }
+  .invoice-total .amount { font-variant-numeric: tabular-nums; }
+  .invoice-form .field { margin-bottom: 10px; }
+  .invoice-form .field label { font-size: .82rem; }
+  .invoice-form .field input,
+  .invoice-form .field select { padding: 9px 10px; border-radius: 8px; font-size: .88rem; }
+</style>
+
+<div class="pos-wrap">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Catalogue</h2>
+        <p class="sub">Sélectionnez un produit et une unité de vente</p>
+      </div>
+    </div>
+    <input type="text" id="posSearch" class="input input-search" placeholder="Rechercher un produit (nom ou code)..." oninput="filterProducts()">
+    {% if sans_stock %}
+    <div class="alert warning mt-12">
+      <strong>{{ sans_stock|length }} produit(s) masqué(s)</strong> — sans stock validé, donc non vendable tant qu'une entrée de stock n'a pas été validée par le propriétaire :
+      {% for p in sans_stock %}<code>{{ p.code }} {{ p.name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="pos-grid mt-16" id="posGrid">
+      {% for entry in catalog %}
+      {% set p = entry.product %}
+      <div class="pos-card" data-search="{{ (p.name ~ ' ' ~ p.code) | lower }}">
+        <div>
+          <div class="name">{{ p.name }}</div>
+          <div class="meta">
+            <span><code>{{ p.code }}</code></span>
+            <span>Stock {{ p.stock_qty | qty }} {{ p.base_unit.code if p.base_unit }}</span>
+          </div>
+        </div>
+        <div class="units">
+          {% for pu in entry.units %}
+          <button type="button" class="unit-btn"
+            data-product-id="{{ p.id }}" data-name="{{ p.name }}"
+            data-unit-id="{{ pu.unit_id }}" data-unit-label="{{ pu.unit.label }}"
+            data-prix="{{ pu.prix_vente }}" data-factor="{{ pu.factor }}"
+            onclick="addToCart(this)">
+            <span>{{ pu.unit.label }}</span>
+            <span class="price">{{ pu.prix_vente | num }} {{ currency }}</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <p class="muted">Aucun produit vendable en {{ currency }}. Ajoutez des prix de vente dans la fiche produit.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card invoice">
+    <div class="invoice-head">
+      <div class="title">Facture / Panier</div>
+      <div class="meta">
+        <span>{{ session.vendeur.full_name }}</span>
+        <span>·</span>
+        <span>{{ session.register.name }}</span>
+        <span>·</span>
+        <span>{{ currency }}</span>
+        <span>·</span>
+        <span id="invoiceDate"></span>
+      </div>
+    </div>
+
+    <div class="invoice-table-wrap">
+      <table class="invoice-table">
+        <thead>
+          <tr>
+            <th>Article</th>
+            <th class="num">Qté</th>
+            <th class="num">PU</th>
+            <th class="num">Montant</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="cartBody">
+          <tr id="cartEmpty"><td colspan="5" class="invoice-empty">Panier vide — cliquez sur un produit pour l'ajouter</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="invoice-section">
+      {% if can_discount %}
+      <div class="field" style="margin-bottom:0">
+        <label for="remise">Remise ({{ currency }})</label>
+        <input type="text" id="remise" class="input" value="0" oninput="render()">
+      </div>
+      {% endif %}
+
+      <div class="invoice-row sub"><span>Sous-total</span><span id="subTotal" class="money">0 {{ currency }}</span></div>
+      {% if can_discount %}<div class="invoice-row sub"><span>Remise</span><span id="remiseTotal" class="money">- 0 {{ currency }}</span></div>{% endif %}
+      <div class="invoice-total"><span>Total à payer</span><span class="amount" id="cartTotal">0 {{ currency }}</span></div>
+    </div>
+
+    <div class="invoice-section invoice-form">
+      <div class="field">
+        <label for="method">Mode de paiement</label>
+        <select id="method" class="input">
+          {% for code, label in payment_labels.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="received">Montant reçu ({{ currency }})</label>
+        <input type="text" id="received" class="input" value="0" oninput="render()">
+        <p class="hint">Rendu / monnaie : <strong id="change">0 {{ currency }}</strong></p>
+      </div>
+
+      {% if can_credit %}
+      <div class="field">
+        <label class="row" style="gap:8px;align-items:center"><input type="checkbox" id="creditToggle" onchange="render()"> Mettre le reste à crédit client</label>
+        <select id="creditCustomer" class="input" style="margin-top:8px">
+          <option value="">— Sélectionner un client —</option>
+          {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}{% if c.credit_limit %} (plafond {{ c.credit_limit | num }}){% endif %}</option>{% endfor %}
+        </select>
+        <p class="hint">Reste à crédit : <strong id="creditRemaining">0 {{ currency }}</strong></p>
+      </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('pos.validate') }}" id="posForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="payload" id="payload">
+        <button type="button" class="btn block" onclick="submitSale()">Valider la vente</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+const CURRENCY = "{{ currency }}";
+let cart = [];
+let seq = 0;
+
+function money(n) { return Number(n).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function fmt(n){ return money(n) + ' ' + CURRENCY; }
+
+function setInvoiceDate(){
+  const el = document.getElementById('invoiceDate');
+  if(el){ el.textContent = new Date().toLocaleString('fr-FR'); }
+}
+setInvoiceDate();
+setInterval(setInvoiceDate, 60000);
+
+function addToCart(btn) {
+  const d = btn.dataset;
+  const key = d.productId + ':' + d.unitId;
+  const existing = cart.find(l => l.key === key);
+  if (existing) { existing.quantity += 1; }
+  else {
+    cart.push({ key, id: ++seq, product_id: Number(d.productId), name: d.name,
+      unit_id: Number(d.unitId), unit_label: d.unitLabel, prix: Number(d.prix), quantity: 1 });
+  }
+  render();
+}
+
+function changeQty(id, delta) {
+  const line = cart.find(l => l.id === id);
+  if (!line) return;
+  line.quantity += delta;
+  if (line.quantity <= 0) cart = cart.filter(l => l.id !== id);
+  render();
+}
+
+function removeLine(id) { cart = cart.filter(l => l.id !== id); render(); }
+
+function subtotal() { return cart.reduce((s, l) => s + l.prix * l.quantity, 0); }
+function remiseValue() {
+  const el = document.getElementById('remise');
+  return el ? (parseFloat(el.value.replace(',', '.')) || 0) : 0;
+}
+
+function render() {
+  const body = document.getElementById('cartBody');
+  if (!cart.length) {
+    body.innerHTML = '<tr id="cartEmpty"><td colspan="5" class="invoice-empty">Panier vide — cliquez sur un produit pour l\'ajouter</td></tr>';
+  } else {
+    body.innerHTML = cart.map(l => `
+      <tr>
+        <td>
+          <div class="line-name">${l.name}</div>
+          <div class="line-unit">${l.unit_label}</div>
+        </td>
+        <td class="num qty-cell">
+          <span class="qty-pill">
+            <button type="button" class="qty-btn" onclick="changeQty(${l.id}, -1)">−</button>
+            <span>${l.quantity}</span>
+            <button type="button" class="qty-btn" onclick="changeQty(${l.id}, 1)">+</button>
+          </span>
+        </td>
+        <td class="num">${money(l.prix)}</td>
+        <td class="num"><span class="money">${money(l.prix * l.quantity)}</span></td>
+        <td class="center"><button type="button" class="qty-btn" onclick="removeLine(${l.id})">×</button></td>
+      </tr>`).join('');
+  }
+
+  const st = subtotal();
+  const r = remiseValue();
+  const total = Math.max(0, st - r);
+
+  const stEl = document.getElementById('subTotal');
+  if(stEl) stEl.textContent = fmt(st);
+
+  const rEl = document.getElementById('remiseTotal');
+  if(rEl) rEl.textContent = '- ' + fmt(r);
+
+  document.getElementById('cartTotal').textContent = fmt(total);
+
+  const received = parseFloat((document.getElementById('received').value || '0').replace(',', '.')) || 0;
+  document.getElementById('change').textContent = fmt(Math.max(0, received - total));
+
+  const creditEl = document.getElementById('creditRemaining');
+  if (creditEl) { creditEl.textContent = fmt(Math.max(0, total - received)); }
+}
+
+function filterProducts() {
+  const q = document.getElementById('posSearch').value.toLowerCase().trim();
+  document.querySelectorAll('#posGrid .pos-card').forEach(c => {
+    c.style.display = (!q || c.dataset.search.includes(q)) ? '' : 'none';
+  });
+}
+
+function submitSale() {
+  if (!cart.length) { alert('Le panier est vide.'); return; }
+  const total = Math.max(0, subtotal() - remiseValue());
+  const received = parseFloat((document.getElementById('received').value || total).toString().replace(',', '.')) || total;
+  const payload = {
+    items: cart.map(l => ({ product_id: l.product_id, unit_id: l.unit_id, quantity: l.quantity })),
+    remise: remiseValue(),
+    payments: [{ amount: received, method: document.getElementById('method').value }]
+  };
+  const creditToggle = document.getElementById('creditToggle');
+  if (creditToggle && creditToggle.checked) {
+    const custSel = document.getElementById('creditCustomer');
+    if (!custSel.value) { alert('Sélectionnez le client pour le crédit.'); return; }
+    if (received > total) { alert('Le montant reçu dépasse le total : pas de crédit nécessaire.'); return; }
+    payload.credit_customer_id = Number(custSel.value);
+    payload.payments = [{ amount: received, method: document.getElementById('method').value }];
+  }
+  document.getElementById('payload').value = JSON.stringify(payload);
+  document.getElementById('posForm').submit();
+}
+
+document.addEventListener('DOMContentLoaded', render);
+</script>
+{% endblock %}

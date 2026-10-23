@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Achat {{ purchase.reference }}{% endblock %}
+{% block heading %}Achat — {{ purchase.reference }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>{{ purchase.reference }}
+        <span class="badge {{ badges.get(purchase.status, 'gray') }}">{{ labels.get(purchase.status, purchase.status) }}</span>
+      </h2>
+      <p class="sub">{{ purchase.supplier.name if purchase.supplier else '—' }} —
+        {{ purchase.montant_total | num }} {{ purchase.currency }} —
+        {{ 'Comptant' if purchase.paid_now else 'A credit (dette fournisseur)' }}</p>
+    </div>
+    <a href="{{ url_for('purchases.index') }}" class="btn ghost">Retour</a>
+  </div>
+
+  <div class="grid cols-4 mt-16">
+    <div class="kpi"><span class="label">Commande le</span><span class="value" style="font-size:1.05rem">{{ purchase.order_date.strftime('%d/%m/%Y') }}</span></div>
+    <div class="kpi"><span class="label">R&eacute;ception pr&eacute;vue</span><span class="value" style="font-size:1.05rem">{{ purchase.expected_date.strftime('%d/%m/%Y') if purchase.expected_date else '—' }}</span></div>
+    <div class="kpi"><span class="label">Cr&eacute;&eacute; par</span><span class="value" style="font-size:1.05rem">{{ purchase.created_by.full_name if purchase.created_by else '—' }}</span></div>
+    <div class="kpi"><span class="label">R&eacute;ceptionn&eacute; le</span><span class="value" style="font-size:1.05rem">{{ purchase.received_at.strftime('%d/%m/%Y %H:%M') if purchase.received_at else '—' }}</span></div>
+  </div>
+  {% if purchase.cancel_reason %}<p class="sub mt-16"><strong>Motif d'annulation :</strong> {{ purchase.cancel_reason }}</p>{% endif %}
+  {% if purchase.notes %}<p class="sub mt-16">{{ purchase.notes }}</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Lignes</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Produit</th><th>Unit&eacute;</th><th>Quantit&eacute;</th><th>Qt&eacute; base</th><th>Prix unitaire</th><th>Total</th></tr></thead>
+      <tbody>
+        {% for line in purchase.lines %}
+        <tr>
+          <td>{{ line.product.name if line.product else '—' }}</td>
+          <td>{{ line.unit.label if line.unit else '—' }}</td>
+          <td>{{ line.quantity | qty }}</td>
+          <td>{{ line.qty_base | qty }}</td>
+          <td>{{ line.prix_unitaire | num }} {{ line.currency }}</td>
+          <td>{{ line.line_total | num }} {{ line.currency }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">Aucune ligne.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid cols-3">
+  {% if current_user.has_permission(P.PURCHASE_PREPARE) and purchase.status == 'brouillon' %}
+  <div class="card">
+    <h2>Commander</h2>
+    <p class="sub">Marquer l'achat comme command&eacute; aupr&egrave;s du fournisseur.</p>
+    <form method="post" action="{{ url_for('purchases.order', purchase_id=purchase.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">Marquer command&eacute;</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if current_user.has_permission(P.PURCHASE_VALIDATE) and purchase.status in ('brouillon', 'commande') %}
+  <div class="card">
+    <h2>R&eacute;ceptionner</h2>
+    <p class="sub">Entr&eacute;e en stock + mise &agrave; jour du co&ucirc;t moyen{% if not purchase.paid_now %} + cr&eacute;ation de la dette fournisseur{% endif %}.</p>
+    <form method="post" action="{{ url_for('purchases.receive', purchase_id=purchase.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit">R&eacute;ceptionner l'achat</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if current_user.has_permission(P.PURCHASE_VALIDATE) and purchase.status != 'annulee' %}
+  <div class="card">
+    <h2>Annuler</h2>
+    <p class="sub">{{ 'Contre-&eacute;crit le stock (retour fournisseur).' if purchase.status == 'receptionnee' else 'Annule la commande.' }}</p>
+    <form method="post" action="{{ url_for('purchases.cancel', purchase_id=purchase.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="reason">Motif d'annulation</label><input type="text" id="reason" name="reason" required></div>
+      <button class="btn danger" type="submit">Annuler l'achat</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

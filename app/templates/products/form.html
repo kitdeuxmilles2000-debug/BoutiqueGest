@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Modifier' if product else 'Nouveau' }} produit{% endblock %}
+{% block heading %}{{ 'Modifier le produit' if product else 'Nouveau produit' }}{% endblock %}
+
+{% block content %}
+<style>
+  .prod-layout { display: grid; grid-template-columns: 1fr 420px; gap: 18px; align-items: start; }
+  @media (max-width: 1100px) { .prod-layout { grid-template-columns: 1fr; } }
+  .prod-form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 16px; }
+  .prod-form .field { margin-bottom: 0; }
+  .prod-form .field.full { grid-column: 1 / -1; }
+  .prod-form .section-title { grid-column: 1 / -1; margin: 10px 0 4px; font-size: .95rem; font-weight: 800; letter-spacing: -.01em; }
+  .prod-form .section-sub { grid-column: 1 / -1; margin: -2px 0 6px; color: var(--muted); font-size: .83rem; }
+  .prod-form input, .prod-form select, .prod-form textarea { padding: 9px 11px; border-radius: 10px; font-size: .9rem; }
+  .prod-preview { position: sticky; top: 78px; }
+  .prod-preview .kpi-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-top: 14px; }
+  .prod-preview .kpi-sm { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .prod-preview .kpi-sm .label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .prod-preview .kpi-sm .value { font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .prod-preview .unit-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .prod-preview .unit-item { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+  .prod-preview .unit-item .info { display: flex; flex-direction: column; gap: 2px; }
+  .prod-preview .unit-item .name { font-weight: 700; }
+  .prod-preview .unit-item .meta { font-size: .8rem; color: var(--muted); }
+  .prod-preview .unit-item .price { font-weight: 800; font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="prod-layout">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>{{ 'Modifier le produit' if product else 'Créer un nouveau produit' }}</h2>
+        <p class="sub">Renseignez les infos, le coût de stockage et les unités de vente. Le retour se fait vers le catalogue.</p>
+      </div>
+    </div>
+
+    <form method="post" class="prod-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="code">Code produit (auto-généré)</label>
+        <input type="text" id="code" name="code" value="{{ product.code if product else '' }}" {% if not product %}placeholder="Généré automatiquement si vide"{% endif %} {% if product %}readonly{% endif %}>
+      </div>
+      <div class="field">
+        <label for="name">Désignation du produit</label>
+        <input type="text" id="name" name="name" value="{{ product.name if product else '' }}" required placeholder="Ex. Huile, Savon, Bière">
+      </div>
+      <div class="field">
+        <label for="category_id">Catégorie</label>
+        <select id="category_id" name="category_id">
+          <option value="">— Aucune —</option>
+          {% for c in categories %}
+          <option value="{{ c.id }}" {{ 'selected' if product and product.category_id == c.id }}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="kind">Nature / Famille</label>
+        <select id="kind" name="kind">
+          {% for code in ['boisson', 'eau', 'lait', 'accessoire', 'autre'] %}
+          <option value="{{ code }}" {{ 'selected' if (product and product.kind == code) or (not product and code == 'autre') }}>{{ code|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="base_unit_id">Unité de stock (comptage)</label>
+        <select id="base_unit_id" name="base_unit_id" required>
+          <option value="">— Choisir —</option>
+          {% for u in units %}
+          <option value="{{ u.id }}" {{ 'selected' if product and product.base_unit_id == u.id }}>{{ u.label }} ({{ u.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="currency">Devise</label>
+        <select id="currency" name="currency">
+          {% for cur in currencies %}
+          <option value="{{ cur }}" {{ 'selected' if (product and product.currency == cur) or (not product and cur == 'CDF') }}>{{ cur }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field full">
+        <label for="seuil_alerte">Seuil d'alerte stock bas (dans l'unité de stock)</label>
+        <input type="text" id="seuil_alerte" name="seuil_alerte" value="{{ product.seuil_alerte | qty if product else '0' }}">
+      </div>
+
+      <div class="section-title">Prix & valorisation</div>
+      <div class="section-sub">Prix de stockage = coût d'achat par unité de stock. Prix de vente = appliqué selon l'unité choisie au POS.</div>
+
+      <div class="field">
+        <label for="cost_avg">Prix de stockage / coût moyen (par unité de stock)</label>
+        <input type="text" id="cost_avg" name="cost_avg" value="{{ product.cost_avg | num if product else '0' }}">
+      </div>
+      <div class="field">
+        <label for="prix_vente_base">Prix de vente par unité de base</label>
+        <input type="text" id="prix_vente_base" name="prix_vente_base" value="{{ base_prix if base_prix is not none else '0' }}">
+      </div>
+
+      <div class="section-title">Unités de vente (détail / gros)</div>
+      <div class="section-sub">Ajoutez Bidon, Bouteille, Verre, Carton, Casier, Sachet avec leur facteur vers l'unité de stock.</div>
+
+      <div class="field">
+        <label for="unite_vente_id">Unité de vente à ajouter / configurer</label>
+        <select id="unite_vente_id" name="unite_vente_id">
+          <option value="">— Choisir une unité (facultatif) —</option>
+          {% for u in units %}
+          <option value="{{ u.id }}">{{ u.label }} ({{ u.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="facteur">Facteur vers l'unité de base</label>
+        <input type="text" id="facteur" name="facteur" value="1" placeholder="Ex. 0.2 (1 verre = 0,2 litre)">
+      </div>
+      <div class="field">
+        <label for="prix_vente_unite">Prix de vente pour cette unité</label>
+        <input type="text" id="prix_vente_unite" name="prix_vente_unite" placeholder="Ex. 1500">
+      </div>
+      <div class="field">
+        <label for="devise_unite">Devise</label>
+        <select id="devise_unite" name="devise_unite">
+          {% for cur in currencies %}<option value="{{ cur }}" {{ 'selected' if cur == 'CDF' }}>{{ cur }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field full">
+        <label><input type="checkbox" name="is_sale_default"> Proposer cette unité par défaut au POS</label>
+      </div>
+
+      <div class="section-title">Suivi & options</div>
+      <div class="field">
+        <label><input type="checkbox" name="is_perishable" {{ 'checked' if product and product.is_perishable }}> Produit périssable</label>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" name="track_lot" {{ 'checked' if product and product.track_lot }}> Suivi par lot</label>
+      </div>
+      <div class="field">
+        <label for="default_expiry_date">Date d'expiration par défaut</label>
+        <input type="date" id="default_expiry_date" name="default_expiry_date" value="{{ product.default_expiry_date.strftime('%Y-%m-%d') if product and product.default_expiry_date else '' }}">
+        <p class="hint">Pré-remplie lors des demandes d'entrée en stock.</p>
+      </div>
+      <div class="field">
+        <label for="shelf_life_days">Durée de conservation (jours)</label>
+        <input type="text" id="shelf_life_days" name="shelf_life_days" value="{{ product.shelf_life_days if product and product.shelf_life_days else '' }}" placeholder="Ex. 30">
+        <p class="hint">Alternative : calcul de la péremption à partir du jour de l'entrée.</p>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" name="active" {{ 'checked' if not product or product.active }}> Actif</label>
+      </div>
+      <div class="field full">
+        <label for="notes">Notes / observations</label>
+        <textarea id="notes" name="notes" rows="2" placeholder="Observations facultatives">{{ product.notes if product and product.notes else '' }}</textarea>
+      </div>
+
+      <div class="field full row">
+        <button type="submit" class="btn">Enregistrer le produit</button>
+        <a href="{{ url_for('products.index') }}" class="btn ghost">Annuler</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card prod-preview">
+    <div class="card-head">
+      <div>
+        <h2>Aperçu du produit</h2>
+        <p class="sub">Ce qui sera visible au catalogue et au POS.</p>
+      </div>
+    </div>
+    <div>
+      <div style="font-weight:800;font-size:1.05rem">{{ product.name if product else 'Nouveau produit' }}</div>
+      <div class="muted">{{ product.code if product else 'Code auto-généré' }}</div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi-sm">
+        <span class="label">Coût de stockage</span>
+        <span class="value">{{ (product.cost_avg if product else 0) | num }} {{ product.currency if product else 'CDF' }}</span>
+      </div>
+      <div class="kpi-sm">
+        <span class="label">Prix vente base</span>
+        <span class="value">{{ (base_prix if base_prix is not none else 0) | num }} {{ product.currency if product else 'CDF' }}</span>
+      </div>
+    </div>
+    <div class="unit-list">
+      <div style="font-weight:700">Unités de vente configurées</div>
+      <div class="unit-item">
+        <div class="info">
+          <div class="name">Unité de base</div>
+          <div class="meta">{{ product.base_unit.label if product and product.base_unit else 'À choisir' }} — facteur 1</div>
+        </div>
+        <div class="price">{{ (base_prix if base_prix is not none else 0) | num }}</div>
+      </div>
+      {% if product %}
+        {% for pu in product.selling_units %}
+          {% if pu.unit_id != product.base_unit_id %}
+          <div class="unit-item">
+            <div class="info">
+              <div class="name">{{ pu.unit.label }} {{ '(défaut)' if pu.is_sale_default }}</div>
+              <div class="meta">Facteur {{ pu.factor | qty }} {{ product.base_unit.code }}</div>
+            </div>
+            <div class="price">{{ pu.prix_vente | num }} {{ pu.currency }}</div>
+          </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

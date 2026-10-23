@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Nouvel achat{% endblock %}
+{% block heading %}Nouvel achat{% endblock %}
+
+{% block content %}
+<style>
+  .purchase-layout { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+  @media (max-width: 980px) { .purchase-layout { grid-template-columns: 1fr; } }
+  .line-table td { vertical-align: middle; }
+  .line-table input, .line-table select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+</style>
+
+<form method="post" id="purchaseForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="items_json" id="itemsJson">
+
+  <div class="purchase-layout">
+    <div class="card">
+      <h2>Articles command&eacute;s</h2>
+      <table class="table line-table">
+        <thead>
+          <tr><th>Produit</th><th>Unit&eacute;</th><th>Quantit&eacute;</th><th>Prix unitaire</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody id="linesBody"></tbody>
+      </table>
+      <div class="row mt-16">
+        <button type="button" class="btn ghost sm" onclick="addLine()">+ Ajouter une ligne</button>
+      </div>
+      <div class="cart-total" style="display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;padding:10px 0;border-top:2px solid var(--line);margin-top:16px">
+        <span>Total achat</span><span id="grandTotal">0</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Ent&ecirc;te</h2>
+      <div class="field">
+        <label for="supplier_id">Fournisseur</label>
+        <select id="supplier_id" name="supplier_id" required>
+          <option value="">— Choisir —</option>
+          {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="currency">Devise</label>
+        <select id="currency" name="currency"><option value="CDF">CDF</option><option value="USD">USD</option></select>
+      </div>
+      <div class="field">
+        <label for="expected_date">Date pr&eacute;vue de r&eacute;ception</label>
+        <input type="date" id="expected_date" name="expected_date">
+      </div>
+      <div class="field">
+        <label class="row" style="gap:6px"><input type="checkbox" name="paid_now" id="paid_now" checked> Pay&eacute; comptant (sinon d&eacute;te fournisseur)</label>
+      </div>
+      <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" rows="2"></textarea></div>
+      <div class="row">
+        <button class="btn" type="submit">Enregistrer (brouillon)</button>
+        <a href="{{ url_for('purchases.index') }}" class="btn ghost">Annuler</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<script>
+const PRODUCTS = {{ products | map(attribute='id') | list | tojson }};
+const PRODUCT_DATA = [
+  {% for p in products %}
+  { id: {{ p.id }}, name: {{ p.name | tojson }}, base_unit: {% if p.base_unit %}{ id: {{ p.base_unit.id }}, label: {{ p.base_unit.label | tojson }} }{% else %}null{% endif %},
+    units: [
+      {% if p.base_unit %}{ id: {{ p.base_unit.id }}, label: {{ p.base_unit.label | tojson }}, factor: 1 }{% endif %}
+      {% for pu in p.selling_units %},{ id: {{ pu.unit_id }}, label: {{ pu.unit.label | tojson }}, factor: {{ pu.factor }} }{% endfor %}
+    ] }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+let seq = 0;
+
+function money(n) { return Number(n || 0).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+
+function unitOptions(selected) {
+  return PRODUCT_DATA.map(p => `<optgroup label="${p.name}">` + p.units.map(u =>
+    `<option value="${p.id}:${u.id}" ${selected === p.id+':'+u.id ? 'selected' : ''}>${u.label} (x${u.factor})</option>`).join('') + '</optgroup>').join('');
+}
+
+function addLine() {
+  const id = ++seq;
+  const tr = document.createElement('tr');
+  tr.id = 'line' + id;
+  tr.innerHTML = `
+    <td><select onchange="onProduct(this, ${id})">${unitOptions()}</select></td>
+    <td class="unitLabel muted">—</td>
+    <td><input type="text" value="1" oninput="render()" class="qty" inputmode="decimal"></td>
+    <td><input type="text" value="0" oninput="render()" class="prix" inputmode="decimal"></td>
+    <td class="lineTotal">0</td>
+    <td><button type="button" class="btn ghost sm" onclick="removeLine(${id})">✕</button></td>`;
+  document.getElementById('linesBody').appendChild(tr);
+  render();
+}
+
+function onProduct(sel, id) {
+  const [pid, uid] = sel.value.split(':').map(Number);
+  const p = PRODUCT_DATA.find(x => x.id === pid);
+  const u = p && p.units.find(x => x.id === uid);
+  const tr = document.getElementById('line' + id);
+  tr.querySelector('.unitLabel').textContent = u ? u.label : '—';
+  tr.dataset.productId = pid;
+  tr.dataset.unitId = uid;
+  render();
+}
+
+function removeLine(id) {
+  const tr = document.getElementById('line' + id);
+  if (tr) tr.remove();
+  render();
+}
+
+function render() {
+  let total = 0;
+  const items = [];
+  document.querySelectorAll('#linesBody tr').forEach(tr => {
+    const qty = parseFloat((tr.querySelector('.qty').value || '0').replace(',', '.')) || 0;
+    const prix = parseFloat((tr.querySelector('.prix').value || '0').replace(',', '.')) || 0;
+    const lt = qty * prix;
+    tr.querySelector('.lineTotal').textContent = money(lt);
+    total += lt;
+    if (tr.dataset.productId) {
+      items.push({ product_id: Number(tr.dataset.productId), unit_id: Number(tr.dataset.unitId), quantity: qty, prix_unitaire: prix });
+    }
+  });
+  document.getElementById('grandTotal').textContent = money(total);
+  document.getElementById('itemsJson').value = JSON.stringify(items);
+}
+
+document.getElementById('purchaseForm').addEventListener('submit', () => render());
+addLine();
+</script>
+{% endblock %}
