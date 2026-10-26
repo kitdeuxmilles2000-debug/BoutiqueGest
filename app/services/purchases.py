@@ -14,6 +14,7 @@ from app.models.finance import CreditType
 from app.models.purchases import Purchase, PurchaseLine, PurchaseStatus
 from app.models.stock import MovementKind
 from app.services import finance as finance_service
+from app.services import notifications as notifications_service
 from app.services.stock import conversion_factor, dec, record_movement
 
 
@@ -113,6 +114,14 @@ def receive_purchase(purchase, user_id, *, cash_session=None, commit=True):
     purchase.status = PurchaseStatus.RECEPTIONNEE
     purchase.received_at = utcnow()
     purchase.validated_by_id = user_id
+
+    # Notifications : stock remis à niveau suite à la réception validée
+    for line in purchase.lines:
+        if dec(line.qty_base) <= 0:
+            continue
+        notifications_service.notify_stock_replenished(
+            line.product, source=purchase.reference, commit=False
+        )
 
     if not purchase.paid_now:
         finance_service.create_credit(

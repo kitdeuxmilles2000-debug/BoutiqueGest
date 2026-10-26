@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Prix et marges{% endblock %}
+{% block heading %}Prix et marges{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card kpi">
+    <span class="label">Objectif de marge par défaut</span>
+    <span class="value accent">{{ marge_objectif | num }} %</span>
+    <span class="foot">Appliqué à tout produit sans marge cible propre</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Objectif de marge</h2>
+  <p class="sub">Le signal de marge (vert, orange, rouge) compare le prix de vente au coût moyen.
+    <strong>Vert</strong> : marge au-dessus de l'objectif. <strong>Orange</strong> : marge positive mais sous l'objectif.
+    <strong>Rouge</strong> : vente à perte. Chaque produit peut avoir sa propre marge cible dans sa fiche.</p>
+  <form method="post" action="{{ url_for('admin.pricing') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Objectif de marge par défaut (%)
+      <input type="text" name="marge_objectif_defaut" inputmode="decimal" value="{{ marge_objectif | num }}" required>
+    </label>
+    <div class="mt-16">
+      <button class="btn">Enregistrer</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

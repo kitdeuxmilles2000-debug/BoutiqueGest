@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import show_pager, delete_form %}
 {% block title %}Entrées de stock en attente{% endblock %}
 {% block heading %}Entrées de stock en attente{% endblock %}
 
@@ -68,12 +69,8 @@
               <div class="row" style="gap:6px; flex-wrap: wrap">
                 <button class="btn sm" type="button" onclick="openValidate({{ e.id }})">Valider</button>
                 <button class="btn ghost sm" type="button" onclick="openEdit({{ e.id }})">Modifier</button>
-                <form method="post" action="{{ url_for('stock.entry_delete', req_id=e.id) }}" onsubmit="return confirm('Supprimer définitivement cette demande en attente ?')">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="owner_password" value="">
-                  <button class="btn danger sm" type="submit">Supprimer</button>
-                </form>
-                <form method="post" action="{{ url_for('stock.entry_delete', req_id=e.id) }}" onsubmit="return confirm('Rejeter cette demande ?')">
+                {{ delete_form(url_for('stock.entry_delete', req_id=e.id), confirm_text='Supprimer définitivement cette demande en attente ?') }}
+                <form method="post" action="{{ url_for('stock.entry_reject', req_id=e.id) }}" onsubmit="return confirm('Rejeter cette demande ?')">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="reason" value="Rejeté par le propriétaire">
                   <button class="btn ghost sm" type="submit">Rejeter</button>
@@ -81,6 +78,7 @@
               </div>
               {% else %}
               <span class="muted">En attente du propriétaire</span>
+              {% if current_user.has_permission(P.STOCK_MANAGE) %}{{ delete_form(url_for('stock.entry_delete', req_id=e.id), confirm_text='Supprimer définitivement cette demande en attente ?') }}{% endif %}
               {% endif %}
             {% elif e.status == 'validee' %}
             <span class="muted">Validé par {{ e.validated_by.username if e.validated_by else '—' }}<br>{{ e.validated_at.strftime('%d/%m/%Y %H:%M') if e.validated_at else '' }}</span>
@@ -94,6 +92,7 @@
         {% endfor %}
       </tbody>
     </table>
+    {{ show_pager(pager) }}
   </div>
 </div>
 

@@ -6,6 +6,7 @@ from app.extensions import db
 from app.security import session as sess
 from app.security.audit import log_action
 from app.services import auth as auth_service
+from app.services import notifications as notifications_service
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -93,6 +94,7 @@ def change_password():
                 commit=True,
             )
             flash("Mot de passe modifie avec succes.", "success")
+            notifications_service.notify_password_changed(current_user)
             return redirect(url_for("main.dashboard"))
 
     return render_template("auth/change_password.html")

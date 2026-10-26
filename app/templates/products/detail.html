@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import delete_form %}
 {% block title %}{{ product.name }}{% endblock %}
 {% block heading %}Produit · {{ product.name }}{% endblock %}
 
@@ -11,7 +12,10 @@
         nature {{ product.kind }} · devise {{ product.currency }}</p>
     </div>
     {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
-    <a href="{{ url_for('products.edit', product_id=product.id) }}" class="btn ghost">Modifier</a>
+    <div class="row" style="gap:8px">
+      <a href="{{ url_for('products.edit', product_id=product.id) }}" class="btn ghost">Modifier</a>
+      <a href="{{ url_for('products.delete', product_id=product.id) }}" class="btn danger">Supprimer</a>
+    </div>
     {% endif %}
   </div>
 
@@ -44,10 +48,7 @@
           <td>{% if pu.is_sale_default %}<span class="badge blue">Oui</span>{% else %}—{% endif %}</td>
           <td>
             {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
-            <form method="post" action="{{ url_for('products.delete_unit', product_id=product.id, pu_id=pu.id) }}" onsubmit="return confirm('Supprimer cette unité de vente ?')">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn ghost sm">Supprimer</button>
-            </form>
+            {{ delete_form(url_for('products.delete_unit', product_id=product.id, pu_id=pu.id), confirm_text='Supprimer cette unité de vente ?') }}
             {% endif %}
           </td>
         </tr>

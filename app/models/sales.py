@@ -26,14 +26,19 @@ SALE_STATUS_LABELS = {
 
 class PaymentMethod:
     ESPECE = "espece"
-    MOBILE_MONEY = "mobile_money"
+    CREDIT = "credit"
     BANQUE = "banque"
 
 
 PAYMENT_LABELS = {
     PaymentMethod.ESPECE: "Especes",
-    PaymentMethod.MOBILE_MONEY: "Mobile Money",
     PaymentMethod.BANQUE: "Banque / virement",
+}
+
+# Moyens de paiement proposes au point de vente : especes (cash) et credit (a credit).
+PAYMENT_LABELS_POS = {
+    PaymentMethod.ESPECE: "Especes",
+    PaymentMethod.CREDIT: "A credit",
 }
 
 

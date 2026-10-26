@@ -106,7 +106,7 @@
           <div class="name">{{ p.name }}</div>
           <div class="meta">
             <span><code>{{ p.code }}</code></span>
-            <span>Stock {{ p.stock_qty | qty }} {{ p.base_unit.code if p.base_unit }}</span>
+            <span>Stock {{ entry.stock_text }}</span>
           </div>
         </div>
         <div class="units">
@@ -115,6 +115,7 @@
             data-product-id="{{ p.id }}" data-name="{{ p.name }}"
             data-unit-id="{{ pu.unit_id }}" data-unit-label="{{ pu.unit.label }}"
             data-prix="{{ pu.prix_vente }}" data-factor="{{ pu.factor }}"
+            data-cost="{{ p.cost_avg * pu.factor }}" data-target="{{ entry.target }}"
             onclick="addToCart(this)">
             <span>{{ pu.unit.label }}</span>
             <span class="price">{{ pu.prix_vente | num }} {{ currency }}</span>
@@ -163,7 +164,7 @@
       {% if can_discount %}
       <div class="field" style="margin-bottom:0">
         <label for="remise">Remise ({{ currency }})</label>
-        <input type="text" id="remise" class="input" value="0" oninput="render()">
+        <input type="text" id="remise" class="input" value="0" oninput="receivedManual = false; render()">
       </div>
       {% endif %}
 
@@ -175,24 +176,33 @@
     <div class="invoice-section invoice-form">
       <div class="field">
         <label for="method">Mode de paiement</label>
-        <select id="method" class="input">
+        <select id="method" class="input" onchange="toggleCredit()">
           {% for code, label in payment_labels.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
         </select>
       </div>
       <div class="field">
         <label for="received">Montant reçu ({{ currency }})</label>
-        <input type="text" id="received" class="input" value="0" oninput="render()">
-        <p class="hint">Rendu / monnaie : <strong id="change">0 {{ currency }}</strong></p>
+        <input type="text" id="received" class="input" value="0" oninput="receivedManual = true; render()">
+        <p class="hint" id="receivedHint">Rendu / monnaie : <strong id="change">0 {{ currency }}</strong></p>
       </div>
 
       {% if can_credit %}
-      <div class="field">
-        <label class="row" style="gap:8px;align-items:center"><input type="checkbox" id="creditToggle" onchange="render()"> Mettre le reste à crédit client</label>
-        <select id="creditCustomer" class="input" style="margin-top:8px">
-          <option value="">— Sélectionner un client —</option>
-          {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}{% if c.credit_limit %} (plafond {{ c.credit_limit | num }}){% endif %}</option>{% endfor %}
+      <div class="field" id="creditBlock">
+        <label class="section-title" style="margin-top:0">Vente à crédit (client)</label>
+        <select id="creditCustomer" class="input" onchange="updateCreditCapacity()">
+          <option value="">— Aucun crédit : le client paie la totalité —</option>
+          {% for c in customers %}
+          <option value="{{ c.id }}" data-limit="{{ c.credit_limit or 0 }}" data-outstanding="{{ c.outstanding }}">
+            {{ c.name }}{% if c.credit_limit %} (plafond {{ c.credit_limit | num }}){% endif %}
+          </option>
+          {% endfor %}
         </select>
-        <p class="hint">Reste à crédit : <strong id="creditRemaining">0 {{ currency }}</strong></p>
+        <label for="creditDueDate" style="margin-top:8px">Échéance du crédit</label>
+        <input type="date" id="creditDueDate" class="input" value="{{ default_due_date }}">
+        <p class="hint">Reste à crédit : <strong id="creditRemaining">0 {{ currency }}</strong>
+          · Capacité de crédit : <strong id="creditCapacity">—</strong></p>
+        <p class="hint">Choisissez un client uniquement si le montant reçu ne couvre pas le total,
+          ou si le mode de paiement est « À crédit ».</p>
       </div>
       {% endif %}
 
@@ -209,6 +219,7 @@
 const CURRENCY = "{{ currency }}";
 let cart = [];
 let seq = 0;
+let receivedManual = false;
 
 function money(n) { return Number(n).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function fmt(n){ return money(n) + ' ' + CURRENCY; }
@@ -227,8 +238,10 @@ function addToCart(btn) {
   if (existing) { existing.quantity += 1; }
   else {
     cart.push({ key, id: ++seq, product_id: Number(d.productId), name: d.name,
-      unit_id: Number(d.unitId), unit_label: d.unitLabel, prix: Number(d.prix), quantity: 1 });
+      unit_id: Number(d.unitId), unit_label: d.unitLabel, prix: Number(d.prix), quantity: 1,
+      cost: Number(d.cost), target: Number(d.target) });
   }
+  receivedManual = false;
   render();
 }
 
@@ -237,15 +250,47 @@ function changeQty(id, delta) {
   if (!line) return;
   line.quantity += delta;
   if (line.quantity <= 0) cart = cart.filter(l => l.id !== id);
+  receivedManual = false;
   render();
 }
 
-function removeLine(id) { cart = cart.filter(l => l.id !== id); render(); }
+function removeLine(id) { cart = cart.filter(l => l.id !== id); receivedManual = false; render(); }
+
+function marginInfo(prix, cost, target) {
+  if (!(prix > 0)) return { level: 'none', pct: 0 };
+  const margin = prix - cost;
+  const pct = margin * 100 / prix;
+  if (margin < 0) return { level: 'loss', pct };
+  if (pct < target) return { level: 'low', pct };
+  return { level: 'ok', pct };
+}
+
+function marginBadge(line) {
+  const m = marginInfo(line.prix, line.cost, line.target);
+  if (m.level === 'loss') return '<span class="badge red">À perte</span>';
+  if (m.level === 'low') return '<span class="badge amber">Marge ' + m.pct.toFixed(1) + ' %</span>';
+  if (m.level === 'ok') return '<span class="badge green">Marge ' + m.pct.toFixed(1) + ' %</span>';
+  return '';
+}
+
+function hasLossLine() {
+  return cart.some(l => marginInfo(l.prix, l.cost, l.target).level === 'loss');
+}
 
 function subtotal() { return cart.reduce((s, l) => s + l.prix * l.quantity, 0); }
 function remiseValue() {
   const el = document.getElementById('remise');
   return el ? (parseFloat(el.value.replace(',', '.')) || 0) : 0;
+}
+
+function isCreditMethod() {
+  const el = document.getElementById('method');
+  return !!el && el.value === 'credit';
+}
+
+function receivedValue() {
+  const el = document.getElementById('received');
+  return parseFloat((el && el.value ? el.value : '0').toString().replace(',', '.')) || 0;
 }
 
 function render() {
@@ -257,7 +302,7 @@ function render() {
       <tr>
         <td>
           <div class="line-name">${l.name}</div>
-          <div class="line-unit">${l.unit_label}</div>
+          <div class="line-unit">${l.unit_label} ${marginBadge(l)}</div>
         </td>
         <td class="num qty-cell">
           <span class="qty-pill">
@@ -284,11 +329,23 @@ function render() {
 
   document.getElementById('cartTotal').textContent = fmt(total);
 
-  const received = parseFloat((document.getElementById('received').value || '0').replace(',', '.')) || 0;
-  document.getElementById('change').textContent = fmt(Math.max(0, received - total));
+  const receivedEl = document.getElementById('received');
+  const creditMode = isCreditMethod();
+  if (creditMode) {
+    // Mode « À crédit » : la totalité part en créance, aucun encaissement espèces.
+    receivedEl.value = '0';
+    receivedEl.disabled = true;
+  } else {
+    receivedEl.disabled = false;
+    if (!receivedManual) { receivedEl.value = total.toFixed(2); }
+  }
+  const receivedNow = creditMode ? 0 : receivedValue();
+  const remainder = Math.max(0, total - Math.min(receivedNow, total));
+  document.getElementById('change').textContent = fmt(Math.max(0, receivedNow - total));
 
   const creditEl = document.getElementById('creditRemaining');
-  if (creditEl) { creditEl.textContent = fmt(Math.max(0, total - received)); }
+  if (creditEl) { creditEl.textContent = fmt(remainder); }
+  updateCreditCapacity(remainder);
 }
 
 function filterProducts() {
@@ -298,27 +355,66 @@ function filterProducts() {
   });
 }
 
+function toggleCredit() {
+  render();
+}
+
+function updateCreditCapacity(remainder) {
+  const capEl = document.getElementById('creditCapacity');
+  const sel = document.getElementById('creditCustomer');
+  if (!capEl || !sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const limit = opt ? parseFloat(opt.dataset.limit || '0') || 0 : 0;
+  const outstanding = opt ? parseFloat(opt.dataset.outstanding || '0') || 0 : 0;
+  if (!sel.value) { capEl.textContent = '—'; capEl.style.color = ''; return; }
+  if (!(limit > 0)) { capEl.textContent = 'illimitée'; capEl.style.color = 'var(--success)'; return; }
+  const capacity = Math.max(0, limit - outstanding);
+  const need = (typeof remainder === 'number')
+    ? remainder
+    : Math.max(0, Math.max(0, subtotal() - remiseValue()) - receivedValue());
+  capEl.textContent = fmt(capacity) + ' disponibles';
+  capEl.style.color = capacity < need ? 'var(--danger)' : 'var(--success)';
+}
+
 function submitSale() {
   if (!cart.length) { alert('Le panier est vide.'); return; }
+  if (hasLossLine() && !confirm('Certaines lignes sont vendues à perte (prix inférieur au coût). Continuer ?')) { return; }
   const total = Math.max(0, subtotal() - remiseValue());
-  const received = parseFloat((document.getElementById('received').value || total).toString().replace(',', '.')) || total;
+  const receivedEl = document.getElementById('received');
+  const creditMode = isCreditMethod();
+  let received = 0;
+  if (!creditMode) {
+    const raw = (receivedEl.value || '').toString().trim();
+    received = parseFloat(raw.replace(',', '.')) || 0;
+    if (!raw) { received = total; receivedEl.value = total.toFixed(2); }
+  }
+  // On n'encaisse jamais plus que le total : le surplus est un rendu, pas un paiement.
+  const paid = creditMode ? 0 : Math.min(Math.max(0, received), total);
+  const creditAmount = Math.max(0, total - paid);
+
   const payload = {
     items: cart.map(l => ({ product_id: l.product_id, unit_id: l.unit_id, quantity: l.quantity })),
     remise: remiseValue(),
-    payments: [{ amount: received, method: document.getElementById('method').value }]
+    payments: paid > 0 ? [{ amount: paid, method: 'espece' }] : []
   };
-  const creditToggle = document.getElementById('creditToggle');
-  if (creditToggle && creditToggle.checked) {
+
+  if (creditAmount > 0.0001) {
     const custSel = document.getElementById('creditCustomer');
-    if (!custSel.value) { alert('Sélectionnez le client pour le crédit.'); return; }
-    if (received > total) { alert('Le montant reçu dépasse le total : pas de crédit nécessaire.'); return; }
+    if (!custSel) { alert('Le crédit n’est pas autorisé pour votre compte : encaissez la totalité.'); return; }
+    if (!custSel.value) {
+      alert('Il reste ' + fmt(creditAmount) + ' à payer : encaissez la totalité ou choisissez le client qui prend le crédit.');
+      return;
+    }
+    const dueEl = document.getElementById('creditDueDate');
+    const dueDate = dueEl ? dueEl.value : '';
+    if (!dueDate) { alert('Définissez la date d’échéance du crédit.'); return; }
     payload.credit_customer_id = Number(custSel.value);
-    payload.payments = [{ amount: received, method: document.getElementById('method').value }];
+    payload.credit_due_date = dueDate;
   }
   document.getElementById('payload').value = JSON.stringify(payload);
   document.getElementById('posForm').submit();
 }
 
-document.addEventListener('DOMContentLoaded', render);
+document.addEventListener('DOMContentLoaded', function(){ render(); });
 </script>
 {% endblock %}

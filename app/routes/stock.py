@@ -21,8 +21,11 @@ from app.models.stock import (
     StockMovement,
 )
 from app.security.audit import log_action
-from app.security.decorators import owner_only, owner_reauth_required, permission_required
+from app.security.decorators import admin_password_required, owner_only, owner_reauth_required, permission_required
+from app.security.owner import check_admin_password
 from app.security.permissions import P
+from app.services.pagination import paginate, paginate_list
+from app.services import pricing as pricing_service
 from app.services import stock as stock_service
 from app.services import stock_validation as stock_validation_service
 from app.services.stock import dec
@@ -41,9 +44,13 @@ def index():
     products = _active_products()
     alerts = stock_service.stock_alerts(products)
     total_value = sum((p.stock_value for p in products), start=dec(0))
+    total_qty = sum((dec(p.stock_qty) for p in products), start=dec(0))
+    pager = paginate_list(products)
     return render_template(
         "stock/index.html",
-        products=products,
+        products=pager.items,
+        pager=pager,
+        total_qty=total_qty,
         alerts=alerts,
         total_value=total_value,
     )
@@ -60,10 +67,11 @@ def movements():
         query = query.filter_by(product_id=product_id)
     if kind:
         query = query.filter_by(kind=kind)
-    movements = query.order_by(StockMovement.created_at.desc()).limit(300).all()
+    pager = paginate(query.order_by(StockMovement.created_at.desc()))
     return render_template(
         "stock/movements.html",
-        movements=movements,
+        pager=pager,
+        movements=pager.items,
         products=_active_products(),
         labels=MOVEMENT_LABELS,
         product_id=product_id,
@@ -87,6 +95,11 @@ def entry():
     pending_qty = {pid: dec(qty) for pid, qty in pending_rows}
 
     if request.method == "POST":
+        direct = request.form.get("direct_validate") == "1"
+        if direct and not check_admin_password(request.form.get("owner_password")):
+            flash("Mot de passe propriétaire/administrateur invalide : entrée non enregistrée.", "danger")
+            return redirect(url_for("stock.entry"))
+
         product_id_raw = request.form.get("product_id", type=int)
         product = db.session.get(Product, product_id_raw) if product_id_raw else None
         unit_id = request.form.get("unit_id", type=int) or None
@@ -114,29 +127,33 @@ def entry():
         supplier_id = request.form.get("supplier_id", type=int) or None
 
         # Creation directe d'un produit par l'administrateur/proprietaire
+        new_product = False
         if product is None and (request.form.get("new_product_name") or "").strip():
+            if not current_user.has_permission(P.PRODUCTS_MANAGE):
+                flash("Création de produit réservée aux profils gérant les produits.", "danger")
+                return redirect(url_for("stock.entry"))
             product = _quick_create_product(current_user)
             if product is None:
                 flash("Création du produit impossible : vérifiez nom, unité de stock et prix.", "danger")
                 return redirect(url_for("stock.entry"))
-            qty_raw_q = (request.form.get("new_qty_initial") or "").strip()
-            if qty_raw_q:
-                quantity_new = dec(qty_raw_q)
-                if quantity_new <= 0:
-                    flash("La quantité à entrer doit être positive.", "danger")
-                    return redirect(url_for("stock.entry"))
-                unit_id = unit_id or product.base_unit_id
-                cost_unit = cost_unit or dec(product.cost_avg)
-                quantity = quantity_new
+            new_product = True
+            quantity = dec((request.form.get("new_qty_initial") or "0").strip())
+            if quantity <= 0:
+                db.session.rollback()
+                flash("La quantité reçue du nouveau produit doit être positive.", "danger")
+                return redirect(url_for("stock.entry"))
+            unit_id = unit_id or product.base_unit_id
+            cost_unit = cost_unit or dec(product.cost_avg)
 
         if product is None:
             flash("Produit introuvable.", "danger")
             return redirect(url_for("stock.entry"))
-        quantity_raw = (request.form.get("quantity") or "").strip()
-        if not quantity_raw or quantity_raw == "0":
-            flash("Indiquez la quantité reçue pour le produit existant.", "danger")
-            return redirect(url_for("stock.entry"))
-        quantity = dec(quantity_raw)
+        if not new_product:
+            quantity_raw = (request.form.get("quantity") or "").strip()
+            if not quantity_raw or quantity_raw == "0":
+                flash("Indiquez la quantité reçue pour le produit existant.", "danger")
+                return redirect(url_for("stock.entry"))
+            quantity = dec(quantity_raw)
 
         # Peremption : valeur du formulaire, sinon fiche produit, sinon duree de conservation
         if expiry_date is None and product.is_perishable:
@@ -167,7 +184,26 @@ def entry():
                 reason=reason,
                 commit=False,
             )
+            if direct:
+                db.session.flush()
+                req, _ = stock_validation_service.validate_entry_request(
+                    req, current_user.id, notes="Entrée directe confirmée par mot de passe", commit=False
+                )
+                log_action(
+                    "stock_entry_direct",
+                    entity="stock_entry_request",
+                    entity_uuid=req.uuid,
+                    after={"product_id": product.id, "qty_base": str(req.qty_base), "status": req.status},
+                    reason=reason,
+                    commit=False,
+                )
             db.session.commit()
+            if direct:
+                flash(
+                    f"Entrée {req.reference} enregistrée : le stock et le coût moyen sont à jour.",
+                    "success",
+                )
+                return redirect(url_for("stock.index"))
             flash(
                 f"Demande d'entrée {req.reference} soumise. En attente de validation par le propriétaire.",
                 "success",
@@ -186,6 +222,7 @@ def entry():
         suppliers=Supplier.query.order_by(Supplier.name).all(),
         units=_stock_units(),
         categories=_stock_categories(),
+        types_mesure=pricing_service.TYPES_MESURE,
         can_create=current_user.has_permission(P.PRODUCTS_MANAGE),
     )
 
@@ -240,6 +277,9 @@ def _quick_create_product(user):
     shelf_raw = (request.form.get("new_shelf_life_days") or "").strip()
     shelf_life = int(shelf_raw) if shelf_raw.isdigit() and int(shelf_raw) > 0 else None
 
+    type_mesure = request.form.get("new_type_mesure") or "autre"
+    if type_mesure not in pricing_service.TYPES_MESURE:
+        type_mesure = "autre"
     product = Product(
         code=code,
         name=name,
@@ -247,6 +287,7 @@ def _quick_create_product(user):
         category_id=category_id,
         currency=currency,
         kind=(request.form.get("new_kind") or "autre"),
+        type_mesure=type_mesure,
         cost_avg=cost,
         seuil_alerte=dec(request.form.get("new_seuil_alerte")),
         is_perishable=is_perishable,
@@ -304,10 +345,11 @@ def entry_pending():
     query = StockEntryRequest.query
     if status_filter in ("en_attente", "validee", "rejetee"):
         query = query.filter_by(status=status_filter)
-    entries = query.order_by(StockEntryRequest.created_at.desc()).limit(300).all()
+    pager = paginate(query.order_by(StockEntryRequest.created_at.desc()))
     return render_template(
         "stock/entry_pending.html",
-        entries=entries,
+        pager=pager,
+        entries=pager.items,
         labels=STOCK_ENTRY_STATUS_LABELS,
         badges=STOCK_ENTRY_STATUS_BADGES,
         filter_status=status_filter,
@@ -373,8 +415,7 @@ def entry_update(req_id):
 @stock_bp.route('/entrees-attente/<int:req_id>/supprimer', methods=['POST'])
 @login_required
 @permission_required(P.STOCK_MANAGE)
-@owner_reauth_required()
-@owner_only()
+@admin_password_required()
 def entry_delete(req_id):
     req = db.session.get(StockEntryRequest, req_id) or abort(404)
     if req.status != StockEntryStatus.EN_ATTENTE:

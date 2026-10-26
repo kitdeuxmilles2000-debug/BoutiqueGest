@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import show_pager %}
 {% block title %}Stock{% endblock %}
 {% block heading %}Stock{% endblock %}
 
@@ -84,7 +85,7 @@
       <tfoot>
         <tr>
           <td colspan="3"><strong>TOTAUX</strong></td>
-          <td class="num"><strong>{{ (products | sum(attribute='stock_qty')) | qty }}</strong></td>
+          <td class="num"><strong>{{ total_qty | qty }}</strong></td>
           <td></td>
           <td></td>
           <td class="num"><strong>{{ total_value | num }}</strong></td>
@@ -93,6 +94,7 @@
       </tfoot>
     </table>
   </div>
+  {{ show_pager(pager) }}
 </div>
     </table>
   </div>

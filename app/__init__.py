@@ -50,7 +50,6 @@ def _register_blueprints(app):
     from app.routes.auth import auth_bp
     from app.routes.cash import cash_bp
     from app.routes.credits import credits_bp
-    from app.routes.expenses import expenses_bp
     from app.routes.main import main_bp
     from app.routes.partners import partners_bp
     from app.routes.pos import pos_bp
@@ -59,20 +58,21 @@ def _register_blueprints(app):
     from app.routes.reports import reports_bp
     from app.routes.sales import sales_bp
     from app.routes.stock import stock_bp
+    from app.routes.notifications import notifications_bp
 
-    app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(admin_bp)
     app.register_blueprint(products_bp)
-    app.register_blueprint(purchases_bp)
     app.register_blueprint(stock_bp)
-    app.register_blueprint(cash_bp)
+    app.register_blueprint(purchases_bp)
     app.register_blueprint(sales_bp)
     app.register_blueprint(pos_bp)
-    app.register_blueprint(partners_bp)
-    app.register_blueprint(expenses_bp)
+    app.register_blueprint(cash_bp)
     app.register_blueprint(credits_bp)
+    app.register_blueprint(partners_bp)
     app.register_blueprint(reports_bp)
-    app.register_blueprint(admin_bp)
+    app.register_blueprint(notifications_bp)
 
 
 def _register_context(app):
@@ -80,6 +80,7 @@ def _register_context(app):
 
     from app.models.settings import OUTBOX_STATUS_BADGES
     from app.models.sync import SYNC_STATUS_BADGES
+    from app.models.notifications import NOTIFICATION_TYPE_BADGES, NOTIFICATION_TYPE_LABELS
     from app.security.permissions import P, PERMISSION_LABELS
 
     @app.template_filter("num")
@@ -114,6 +115,8 @@ def _register_context(app):
             "app_version": app.config.get("APP_VERSION", __version__),
             "SYNC_STATUS_BADGES": SYNC_STATUS_BADGES,
             "OUTBOX_STATUS_BADGES": OUTBOX_STATUS_BADGES,
+            "NOTIFICATION_TYPE_LABELS": NOTIFICATION_TYPE_LABELS,
+            "NOTIFICATION_TYPE_BADGES": NOTIFICATION_TYPE_BADGES,
             "is_owner": lambda: is_owner(current_user),
             "now_date": date.today(),
         }

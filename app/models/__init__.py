@@ -55,6 +55,7 @@ from app.models.sales import (
     CashSession,
     CashSessionStatus,
     PAYMENT_LABELS,
+    PAYMENT_LABELS_POS,
     Payment,
     PaymentMethod,
     Refund,
@@ -126,6 +127,7 @@ __all__ = [
     "Settlement",
     "Supplier",
     "PAYMENT_LABELS",
+    "PAYMENT_LABELS_POS",
     "Payment",
     "PaymentMethod",
     "Permission",
@@ -156,3 +158,4 @@ __all__ = [
     "UserSession",
     "utcnow",
 ]
+from app.models import notifications  # noqa

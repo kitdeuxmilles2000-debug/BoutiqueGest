@@ -81,7 +81,7 @@ vente au **verre = 0,2 L**. · `Boisson` : bouteille/casier/carton. · `Accessoi
 |---|---|
 | **Sale** | `numero` (unique), `date`, `vendeur_id`, `cash_session_id`, `montant_total`, `currency`, `statut` (`brouillon`/`soumise`/`validee`/`annulee`/`remboursee`), `remise`, `sale_origine_id` (correction) |
 | **SaleLine** | `sale_id`, `product_id`, `unit_id`, `qte`, `qte_base` (convertie), `prix_unitaire`, `remise_ligne`, `cout_unitaire_cmp`, `currency` |
-| **Payment** | `sale_id` (ou crédit), `montant`, `currency`, `moyen` (`espece_cdf`/`espece_usd`/`mobile_money`/`banque`), `reference`, `date` |
+| **Payment** | `sale_id` (ou crédit), `montant`, `currency`, `moyen` (`espece_cdf`/`espece_usd`/`banque`), `reference`, `date` |
 | **Refund** | `sale_id`, `montant`, `currency`, `moyen`, `motif`, `remise_en_stock` (bool), `autorise_par` |
 
 Statuts distincts : en cours / soumise / validée / annulée / remboursée.

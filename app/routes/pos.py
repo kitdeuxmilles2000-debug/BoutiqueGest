@@ -1,5 +1,6 @@
 """Point de vente (POS) : panier rapide et encaissement."""
 import json
+from datetime import date, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -8,12 +9,13 @@ from app.extensions import db
 from app.models.catalog import Product
 from app.models.finance import CreditType
 from app.models.partners import Customer
-from app.models.sales import PAYMENT_LABELS, PaymentMethod
+from app.models.sales import PAYMENT_LABELS_POS, PaymentMethod
 from app.security.audit import log_action
 from app.security.decorators import permission_required
 from app.security.permissions import P
 from app.services import cash as cash_service
 from app.services import finance as finance_service
+from app.services import pricing as pricing_service
 from app.services import sales as sales_service
 from app.services.stock import dec
 
@@ -40,7 +42,12 @@ def index():
         if dec(product.stock_qty) <= 0:
             sans_stock.append(product)
             continue
-        catalog.append({"product": product, "units": units})
+        catalog.append({
+            "product": product,
+            "units": units,
+            "stock_text": pricing_service.stock_in_sale_units(product),
+            "target": pricing_service.target_margin(product),
+        })
 
     return render_template(
         "pos/index.html",
@@ -49,10 +56,11 @@ def index():
         sans_stock=sans_stock,
         currency=currency,
         methods=PaymentMethod,
-        payment_labels=PAYMENT_LABELS,
+        payment_labels=PAYMENT_LABELS_POS,
         can_discount=current_user.has_permission(P.SALES_DISCOUNT),
         can_credit=current_user.has_permission(P.CREDITS_MANAGE),
         customers=Customer.query.filter_by(active=True).order_by(Customer.name).all(),
+        default_due_date=(date.today() + timedelta(days=30)).isoformat(),
     )
 
 
@@ -89,6 +97,8 @@ def validate():
     notes = (payload.get("notes") or "").strip() or None
 
     try:
+        # La vente et le credit eventuel sont ecrits dans **la meme transaction** :
+        # soit tout passe, soit rien n'est enregistre (pas de vente orpheline).
         sale = sales_service.create_sale(
             current_user.id,
             session,
@@ -97,6 +107,7 @@ def validate():
             remise=remise,
             payments=payments,
             notes=notes,
+            commit=False,
         )
     except sales_service.StockInsuffisant as exc:
         db.session.rollback()
@@ -107,42 +118,96 @@ def validate():
         flash(str(exc), "danger")
         return redirect(url_for("pos.index"))
 
+    remaining = dec(sale.montant_total) - dec(sale.montant_paye)
+    credit = None
+    if remaining > 0:
+        customer_id = payload.get("credit_customer_id")
+        if not current_user.has_permission(P.CREDITS_MANAGE):
+            db.session.rollback()
+            flash(
+                f"Il reste {remaining} {sale.currency} a payer et vous n'avez pas "
+                "le droit de creer un credit. Encaissez la totalite.",
+                "danger",
+            )
+            return redirect(url_for("pos.index"))
+        if not customer_id:
+            db.session.rollback()
+            flash(
+                f"Il reste {remaining} {sale.currency} a payer : encaissez la totalite "
+                "ou choisissez un client pour mettre le reste a credit.",
+                "danger",
+            )
+            return redirect(url_for("pos.index"))
+
+        customer = db.session.get(Customer, customer_id)
+        if customer is None:
+            db.session.rollback()
+            flash("Client introuvable : la vente n'a pas ete enregistree.", "danger")
+            return redirect(url_for("pos.index"))
+
+        plafond = dec(customer.credit_limit)
+        if plafond > 0 and (dec(customer.outstanding) + remaining) > plafond:
+            db.session.rollback()
+            flash(
+                f"Plafond de credit depasse pour {customer.name} "
+                f"(encours {customer.outstanding} + {remaining} > {plafond}). "
+                "Vente annulee : encaissez la totalite ou reglez une partie de l'encours.",
+                "danger",
+            )
+            return redirect(url_for("pos.index"))
+
+        try:
+            due_date = finance_service.coerce_date(payload.get("credit_due_date"))
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), "danger")
+            return redirect(url_for("pos.index"))
+        if due_date is None:
+            due_date = date.today() + timedelta(days=30)
+
+        credit = finance_service.create_credit(
+            credit_type=CreditType.CLIENT,
+            amount=remaining,
+            currency=sale.currency,
+            customer=customer,
+            sale=sale,
+            user_id=current_user.id,
+            due_date=due_date,
+            commit=False,
+        )
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("La vente n'a pas pu etre enregistree. Reessayez.", "danger")
+        return redirect(url_for("pos.index"))
+
     log_action(
         "sale_create",
         entity="sale",
         entity_uuid=sale.uuid,
         after={"numero": sale.numero, "total": str(sale.montant_total), "lines": len(items)},
-        commit=True,
+        commit=credit is None,
     )
-
-    remaining = dec(sale.montant_total) - dec(sale.montant_paye)
-    customer_id = payload.get("credit_customer_id")
-    if remaining > 0 and customer_id and current_user.has_permission(P.CREDITS_MANAGE):
-        customer = db.session.get(Customer, customer_id)
-        if customer is not None:
-            if customer.credit_limit and (customer.outstanding + remaining) > dec(customer.credit_limit):
-                flash(
-                    f"Plafond de credit depasse pour {customer.name} "
-                    f"(encours {customer.outstanding} + {remaining} > {customer.credit_limit}).",
-                    "warning",
-                )
-            else:
-                credit = finance_service.create_credit(
-                    credit_type=CreditType.CLIENT,
-                    amount=remaining,
-                    currency=sale.currency,
-                    customer=customer,
-                    sale=sale,
-                    user_id=current_user.id,
-                )
-                log_action(
-                    "credit_create",
-                    entity="credit",
-                    entity_uuid=credit.uuid,
-                    after={"type": "client", "amount": str(remaining), "sale": sale.numero},
-                    commit=True,
-                )
-                flash(f"Reste de {remaining} {sale.currency} porte au credit de {customer.name}.", "info")
+    if credit is not None:
+        log_action(
+            "credit_create",
+            entity="credit",
+            entity_uuid=credit.uuid,
+            after={
+                "type": "client",
+                "amount": str(remaining),
+                "sale": sale.numero,
+                "echeance": credit.due_date.isoformat() if credit.due_date else None,
+            },
+            commit=True,
+        )
+        flash(
+            f"Reste de {remaining} {sale.currency} porte au credit de {customer.name} "
+            f"(echeance {credit.due_date:%d/%m/%Y}).",
+            "info",
+        )
 
     flash(f"Vente {sale.numero} enregistree.", "success")
     return redirect(url_for("sales.detail", sale_id=sale.id))

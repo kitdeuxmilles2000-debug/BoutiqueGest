@@ -61,12 +61,31 @@
           {% endfor %}
         </select>
       </div>
+      <div class="field full">
+        <label for="type_mesure">Type de produit (pré-remplit l'unité de stock)</label>
+        <select id="type_mesure" name="type_mesure" onchange="applyTypeMesure(this.value, true)">
+          {% for code, (label, base_code, help) in types_mesure.items() %}
+          <option value="{{ code }}" data-base="{{ base_code or '' }}" data-help="{{ help }}" {{ 'selected' if (product and product.type_mesure == code) or (not product and code == 'autre') }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="hint" id="type_help"></p>
+      </div>
+      <div class="field">
+        <label for="famille">Famille</label>
+        <input type="text" id="famille" name="famille" list="familles_list" value="{{ product.famille if product and product.famille else '' }}" placeholder="Ex. Fil à coudre, Lait, Eau minérale">
+        <datalist id="familles_list">{% for f in familles %}<option value="{{ f }}">{% endfor %}</datalist>
+      </div>
+      <div class="field">
+        <label for="couleur">Couleur / variante</label>
+        <input type="text" id="couleur" name="couleur" list="couleurs_list" value="{{ product.couleur if product and product.couleur else '' }}" placeholder="Ex. Rouge, Bleu 2">
+        <datalist id="couleurs_list">{% for c in couleurs %}<option value="{{ c }}">{% endfor %}</datalist>
+      </div>
       <div class="field">
         <label for="base_unit_id">Unité de stock (comptage)</label>
-        <select id="base_unit_id" name="base_unit_id" required>
+        <select id="base_unit_id" name="base_unit_id" required onchange="syncSellingUnitOptions()">
           <option value="">— Choisir —</option>
           {% for u in units %}
-          <option value="{{ u.id }}" {{ 'selected' if product and product.base_unit_id == u.id }}>{{ u.label }} ({{ u.code }})</option>
+          <option value="{{ u.id }}" data-code="{{ u.code }}" {{ 'selected' if product and product.base_unit_id == u.id }}>{{ u.label }} ({{ u.code }})</option>
           {% endfor %}
         </select>
       </div>
@@ -92,7 +111,12 @@
       </div>
       <div class="field">
         <label for="prix_vente_base">Prix de vente par unité de base</label>
-        <input type="text" id="prix_vente_base" name="prix_vente_base" value="{{ base_prix if base_prix is not none else '0' }}">
+        <input type="text" id="prix_vente_base" name="prix_vente_base" value="{{ base_prix if base_prix is not none else '0' }}" oninput="updateMargin()">
+      </div>
+      <div class="field full">
+        <label for="marge_cible">Marge cible (%) — vide = objectif par défaut ({{ default_margin | num }} %)</label>
+        <input type="text" id="marge_cible" name="marge_cible" value="{{ product.marge_cible | num if product and product.marge_cible is not none else '' }}" placeholder="Ex. 25" oninput="updateMargin()">
+        <p class="hint" id="margin_hint"></p>
       </div>
 
       <div class="section-title">Unités de vente (détail / gros)</div>
@@ -156,6 +180,57 @@
       </div>
     </form>
   </div>
+
+<script>
+const DEFAULT_MARGIN = {{ default_margin | float | tojson }};
+function applyTypeMesure(code, setBase) {
+  const opt = document.querySelector('#type_mesure option[value="' + code + '"]');
+  if (!opt) return;
+  document.getElementById('type_help').textContent = opt.dataset.help || '';
+  const base = opt.dataset.base;
+  const sel = document.getElementById('base_unit_id');
+  // Ne jamais changer l'unité de stock d'un produit existant sans action explicite :
+  // cela creerait une unite fantome et fausserait stock, prix et conversions.
+  if (setBase && base) {
+    const target = Array.from(sel.options).find(o => o.dataset.code === base);
+    if (target) sel.value = target.value;
+  }
+  syncSellingUnitOptions();
+}
+function syncSellingUnitOptions() {
+  const baseSel = document.getElementById('base_unit_id');
+  const sellSel = document.getElementById('unite_vente_id');
+  if (!baseSel || !sellSel) return;
+  const base = baseSel.value;
+  Array.from(sellSel.options).forEach(function (o) {
+    if (!o.value) return;
+    const clash = o.value === base;
+    o.disabled = clash;
+    o.hidden = clash;
+    if (clash && sellSel.value === o.value) sellSel.value = '';
+  });
+}
+function updateMargin() {
+  const price = parseFloat((document.getElementById('prix_vente_base').value || '0').replace(',', '.')) || 0;
+  const cost = parseFloat((document.getElementById('cost_avg').value || '0').replace(',', '.')) || 0;
+  const raw = (document.getElementById('marge_cible').value || '').replace(',', '.');
+  const target = raw.trim() ? parseFloat(raw) : DEFAULT_MARGIN;
+  const hint = document.getElementById('margin_hint');
+  if (price <= 0) { hint.textContent = ''; return; }
+  const pct = (price - cost) * 100 / price;
+  let txt = 'Marge actuelle : ' + pct.toFixed(1) + ' %. ';
+  if (price - cost < 0) txt += 'Vente à perte !';
+  else if (pct < target) txt += 'Sous l\'objectif de ' + target + ' %.';
+  else txt += 'Objectif atteint.';
+  hint.textContent = txt;
+}
+document.addEventListener('DOMContentLoaded', function () {
+  applyTypeMesure(document.getElementById('type_mesure').value, false);
+  syncSellingUnitOptions();
+  updateMargin();
+});
+</script>
+
 
   <div class="card prod-preview">
     <div class="card-head">

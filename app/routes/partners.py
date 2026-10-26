@@ -3,10 +3,14 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 
 from app.extensions import db
+from app.models.finance import Credit
 from app.models.partners import Customer, Supplier
+from app.models.purchases import Purchase
+from app.models.stock import StockEntryRequest
 from app.security.audit import log_action
-from app.security.decorators import permission_required
+from app.security.decorators import admin_password_required, permission_required
 from app.security.permissions import P
+from app.services.pagination import paginate
 from app.services.stock import dec
 
 partners_bp = Blueprint("partners", __name__, url_prefix="/partenaires")
@@ -37,10 +41,29 @@ def customers():
             flash(f"Client « {name} » cree.", "success")
         return redirect(url_for("partners.customers"))
 
+    pager = paginate(Customer.query.order_by(Customer.name))
     return render_template(
         "partners/customers.html",
-        customers=Customer.query.order_by(Customer.name).all(),
+        customers=pager.items,
+        pager=pager,
     )
+
+
+@partners_bp.route("/clients/<int:customer_id>/supprimer", methods=["POST"])
+@login_required
+@permission_required(P.PARTNERS_MANAGE)
+@admin_password_required()
+def delete_customer(customer_id):
+    customer = db.session.get(Customer, customer_id) or abort(404)
+    used = Credit.query.filter_by(customer_id=customer.id).count()
+    if used:
+        flash(f"Client « {customer.name} » a {used} crédit(s) : suppression refusée (désactivez-le plutôt).", "danger")
+        return redirect(url_for("partners.customers"))
+    name = customer.name
+    db.session.delete(customer)
+    log_action("customer_delete", entity="customer", after={"name": name}, commit=True)
+    flash(f"Client « {name} » supprimé.", "success")
+    return redirect(url_for("partners.customers"))
 
 
 @partners_bp.route("/clients/<int:customer_id>/modifier", methods=["GET", "POST"])
@@ -88,11 +111,34 @@ def suppliers():
             flash(f"Fournisseur « {name} » cree.", "success")
         return redirect(url_for("partners.suppliers"))
 
+    pager = paginate(Supplier.query.order_by(Supplier.name))
     return render_template(
         "partners/suppliers.html",
-        suppliers=Supplier.query.order_by(Supplier.name).all(),
+        suppliers=pager.items,
+        pager=pager,
         currencies=CURRENCIES,
     )
+
+
+@partners_bp.route("/fournisseurs/<int:supplier_id>/supprimer", methods=["POST"])
+@login_required
+@permission_required(P.PARTNERS_MANAGE)
+@admin_password_required()
+def delete_supplier(supplier_id):
+    supplier = db.session.get(Supplier, supplier_id) or abort(404)
+    used = (
+        Purchase.query.filter_by(supplier_id=supplier.id).count()
+        + Credit.query.filter_by(supplier_id=supplier.id).count()
+        + StockEntryRequest.query.filter_by(supplier_id=supplier.id).count()
+    )
+    if used:
+        flash(f"Fournisseur « {supplier.name} » a {used} opération(s) liée(s) : suppression refusée (désactivez-le plutôt).", "danger")
+        return redirect(url_for("partners.suppliers"))
+    name = supplier.name
+    db.session.delete(supplier)
+    log_action("supplier_delete", entity="supplier", after={"name": name}, commit=True)
+    flash(f"Fournisseur « {name} » supprimé.", "success")
+    return redirect(url_for("partners.suppliers"))
 
 
 @partners_bp.route("/fournisseurs/<int:supplier_id>/modifier", methods=["GET", "POST"])

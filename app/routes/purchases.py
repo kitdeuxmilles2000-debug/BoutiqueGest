@@ -14,10 +14,11 @@ from app.models.purchases import (
     PurchaseStatus,
 )
 from app.security.audit import log_action
-from app.security.decorators import permission_required
+from app.security.decorators import admin_password_required, permission_required
 from app.security.permissions import P
 from app.services import cash as cash_service
 from app.services import purchases as purchase_service
+from app.services.pagination import paginate
 from app.services.stock import dec
 
 purchases_bp = Blueprint("purchases", __name__, url_prefix="/achats")
@@ -39,14 +40,31 @@ def index():
     query = Purchase.query
     if status:
         query = query.filter_by(status=status)
-    purchases = query.order_by(Purchase.order_date.desc()).limit(200).all()
+    pager = paginate(query.order_by(Purchase.order_date.desc()))
     return render_template(
         "purchases/index.html",
-        purchases=purchases,
+        pager=pager,
+        purchases=pager.items,
         labels=PURCHASE_STATUS_LABELS,
         badges=PURCHASE_STATUS_BADGES,
         status=status,
     )
+
+
+@purchases_bp.route("/<int:purchase_id>/supprimer", methods=["POST"])
+@login_required
+@permission_required(P.PURCHASE_PREPARE)
+@admin_password_required()
+def delete(purchase_id):
+    purchase = db.session.get(Purchase, purchase_id) or abort(404)
+    if purchase.status not in (PurchaseStatus.BROUILLON, PurchaseStatus.COMMANDE):
+        flash("Seul un achat brouillon ou commandé peut être supprimé. Un achat reçu ou annulé se corrige par annulation.", "danger")
+        return redirect(url_for("purchases.index"))
+    reference = purchase.reference
+    db.session.delete(purchase)
+    log_action("purchase_delete", entity="purchase", after={"reference": reference}, commit=True)
+    flash(f"Achat {reference} supprimé.", "success")
+    return redirect(url_for("purchases.index"))
 
 
 @purchases_bp.route("/nouveau", methods=["GET", "POST"])

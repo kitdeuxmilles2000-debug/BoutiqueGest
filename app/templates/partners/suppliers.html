@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import show_pager, delete_form %}
 {% block title %}Fournisseurs{% endblock %}
 {% block heading %}Fournisseurs{% endblock %}
 
@@ -6,7 +7,7 @@
 <div class="grid cols-3">
   <div class="card">
     <h2>Fournisseurs</h2>
-    <p class="sub">{{ suppliers|length }} fournisseur(s).</p>
+    <p class="sub">{{ pager.total }} fournisseur(s).</p>
     <div class="table-wrap">
       <table class="table">
         <thead><tr><th>Nom</th><th>Contact</th><th>Devise</th><th>Conditions</th><th>Etat</th><th></th></tr></thead>
@@ -18,7 +19,8 @@
             <td><span class="pill">{{ s.default_currency }}</span></td>
             <td>{{ s.terms or '—' }}</td>
             <td>{% if s.active %}<span class="badge green">Actif</span>{% else %}<span class="badge gray">Inactif</span>{% endif %}</td>
-            <td>{% if current_user.has_permission(P.PARTNERS_MANAGE) %}<a class="btn ghost sm" href="{{ url_for('partners.edit_supplier', supplier_id=s.id) }}">Modifier</a>{% endif %}</td>
+            <td>{% if current_user.has_permission(P.PARTNERS_MANAGE) %}<a class="btn ghost sm" href="{{ url_for('partners.edit_supplier', supplier_id=s.id) }}">Modifier</a>
+              {{ delete_form(url_for('partners.delete_supplier', supplier_id=s.id), confirm_text='Supprimer le fournisseur ' ~ s.name ~ ' ?') }}{% endif %}</td>
           </tr>
           {% else %}
           <tr><td colspan="6" class="muted">Aucun fournisseur.</td></tr>
@@ -26,6 +28,7 @@
         </tbody>
       </table>
     </div>
+    {{ show_pager(pager) }}
   </div>
 
   {% if current_user.has_permission(P.PARTNERS_MANAGE) %}

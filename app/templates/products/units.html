@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import delete_form %}
 {% block title %}Unités{% endblock %}
 {% block heading %}Unités de mesure{% endblock %}
 
@@ -8,7 +9,7 @@
   <p class="sub">Les conversions (facteur vers l'unité de base) se définissent produit par produit.</p>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Code</th><th>Libellé</th><th>Type</th><th>Système</th></tr></thead>
+      <thead><tr><th>Code</th><th>Libellé</th><th>Type</th><th>Système</th><th></th></tr></thead>
       <tbody>
         {% for u in units %}
         <tr>
@@ -16,6 +17,7 @@
           <td>{{ u.label }}</td>
           <td>{{ u.kind }}</td>
           <td>{% if u.is_system %}<span class="badge gray">fournie</span>{% else %}<span class="badge blue">perso</span>{% endif %}</td>
+          <td>{% if not u.is_system and current_user.has_permission(P.PRODUCTS_MANAGE) %}{{ delete_form(url_for('products.delete_global_unit', unit_id=u.id), confirm_text='Supprimer l unite ' ~ u.label ~ ' ?') }}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

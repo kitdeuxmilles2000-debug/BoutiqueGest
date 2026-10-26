@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import show_pager, delete_form %}
 {% block title %}Achats &amp; r&eacute;ceptions{% endblock %}
 {% block heading %}Achats &amp; r&eacute;ceptions{% endblock %}
 
@@ -37,7 +38,12 @@
           <td>{{ achat.montant_total | num }} {{ achat.currency }}</td>
           <td><span class="badge {{ badges.get(achat.status, 'gray') }}">{{ labels.get(achat.status, achat.status) }}</span></td>
           <td>{{ 'Comptant' if achat.paid_now else 'A credit' }}</td>
-          <td><a class="btn ghost sm" href="{{ url_for('purchases.detail', purchase_id=achat.id) }}">Ouvrir</a></td>
+          <td>
+            <a class="btn ghost sm" href="{{ url_for('purchases.detail', purchase_id=achat.id) }}">Ouvrir</a>
+            {% if achat.status in ['brouillon', 'commande'] and current_user.has_permission(P.PURCHASE_PREPARE) %}
+              {{ delete_form(url_for('purchases.delete', purchase_id=achat.id), confirm_text='Supprimer l achat ' ~ achat.reference ~ ' ?') }}
+            {% endif %}
+          </td>
         </tr>
         {% else %}
         <tr><td colspan="7" class="muted">Aucun achat.</td></tr>
@@ -45,5 +51,6 @@
       </tbody>
     </table>
   </div>
+  {{ show_pager(pager) }}
 </div>
 {% endblock %}
