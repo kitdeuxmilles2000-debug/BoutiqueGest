@@ -1,0 +1,24 @@
+BOUTIQUEGEST - INSTALLATION ET LANCEMENT
+========================================
+
+POUR INSTALLER
+--------------
+1. Ouvrir ce dossier
+2. Double-cliquer sur "00_INSTALLER_BOUTIQUEGEST.bat"
+3. Suivre les instructions dans la fenêtre noire
+4. Un raccourci "BoutiqueGest" apparaitra sur votre Bureau
+
+POUR LANCER
+-----------
+Double-cliquer simplement on "BoutiqueGest" sur votre Bureau
+
+PREREQUIS
+---------
+- Windows 10/11
+- Python 3.11 ou 3.12 installé avec "Add Python to PATH"
+- Connexion internet pour l'installation
+
+IMPORTANT
+---------
+La fenêtre noire doit rester ouverte pendant que l'application tourne.
+Pour arrêter, fermer la fenêtre noire ou appuyer sur CTRL+C.
