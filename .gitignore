@@ -32,3 +32,10 @@ logs/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Autoriser les sauvegardes versionnées (history)
+!history/
+!history/*.db
+!history/*.sha256
+!history/*.json
+!history/README.md
