@@ -9,6 +9,7 @@ from app.models.sales import CashSession, CashSessionStatus, Sale, SaleStatus
 from app.security.permissions import P
 from app.services import cash as cash_service
 from app.services import finance as finance_service
+from app.services import reports as reports_service
 from app.services import stock as stock_service
 from app.services.stock import dec
 
@@ -52,6 +53,11 @@ def dashboard():
         if count:
             caisse_label = f"{count} caisse(s) ouverte(s)"
 
+    resultat_jour = {}
+    if current_user.has_permission(P.REPORTS_VIEW):
+        debut, fin = reports_service.period_bounds("jour")
+        resultat_jour = reports_service.result_summary(debut, fin)
+
     alerts = stock_service.stock_alerts()
 
     en_retard, proches, echeances_echues = [], [], []
@@ -64,6 +70,7 @@ def dashboard():
         ventes_count=len(today_sales),
         ventes_marge=ventes_marge,
         ventes_par_devise=ventes_par_devise,
+        resultat_jour=resultat_jour,
         caisse_ouverte=caisse_label is not None,
         caisse_label=caisse_label,
         ruptures=len(alerts["out_of_stock"]),

@@ -16,6 +16,7 @@ from app.security.audit import log_action
 from app.security.decorators import permission_required
 from app.security.permissions import P
 from app.services import sales as sales_service
+from app.services.pagination import paginate
 from app.services.stock import dec
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/ventes")
@@ -53,10 +54,12 @@ def index():
     if status:
         query = query.filter_by(status=status)
 
-    sales = query.order_by(Sale.created_at.desc()).limit(200).all()
+    pager = paginate(query.order_by(Sale.created_at.desc()))
+    sales = pager.items
     total_visible = sum((s.montant_total for s in sales if s.is_active), start=dec(0))
     return render_template(
         "sales/index.html",
+        pager=pager,
         sales=sales,
         labels=SALE_STATUS_LABELS,
         day=day,

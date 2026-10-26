@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Rapport d'activité - {{ app_name }}</title>
+</head>
+{%- macro amount(value, currency=None) -%}
+{{- "{:,.2f}".format((value or 0)|float).replace(",", " ").replace(".", ",") -}}
+{%- if currency %} {{ currency }}{% endif -%}
+{%- endmacro -%}
+{%- macro money_cell(value, currency) -%}
+<span style="white-space:nowrap;"><strong>{{ amount(value, currency) }}</strong></span>
+{%- endmacro -%}
+<body style="margin:0;padding:0;background:#eef2f9;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2f9;">
+    <tr>
+      <td align="center" style="padding:28px 12px;">
+
+        <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0"
+               style="width:100%;max-width:640px;background:#ffffff;border:1px solid #dbe3f0;border-radius:14px;overflow:hidden;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+
+          <!-- En-tete -->
+          <tr>
+            <td style="background:#1e3a8a;padding:26px 32px 24px;background-image:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 100%);">
+              <div style="font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#bfdbfe;font-weight:700;">
+                {{ app_name }}
+              </div>
+              <div style="font-size:26px;line-height:1.2;color:#ffffff;font-weight:700;margin-top:8px;">
+                Rapport d'activité
+              </div>
+              <div style="font-size:13px;color:#dbeafe;margin-top:10px;">
+                {{ periode_label }} &nbsp;·&nbsp; du {{ debut.strftime('%d/%m/%Y') }} au {{ fin.strftime('%d/%m/%Y') }}
+              </div>
+            </td>
+          </tr>
+
+          <!-- Chiffres cles -->
+          <tr>
+            <td style="padding:24px 32px 6px;">
+              <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b;font-weight:700;">
+                Chiffres clés · {{ currency }}
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">
+                <tr>
+                  <td width="25%" valign="top" style="padding:0 6px 0 0;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                           style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                      <tr><td style="padding:14px 14px 6px;font-size:11px;color:#64748b;font-weight:600;">CHIFFRE D'AFFAIRES</td></tr>
+                      <tr><td style="padding:0 14px 4px;font-size:19px;font-weight:700;color:#0f172a;">{{ amount(highlight_ventes.ca) }}</td></tr>
+                      <tr><td style="padding:0 14px 14px;font-size:11px;color:#64748b;">{{ highlight_ventes.count }} vente(s)</td></tr>
+                    </table>
+                  </td>
+                  <td width="25%" valign="top" style="padding:0 6px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                           style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                      <tr><td style="padding:14px 14px 6px;font-size:11px;color:#64748b;font-weight:600;">MARGE BRUTE</td></tr>
+                      <tr><td style="padding:0 14px 4px;font-size:19px;font-weight:700;color:{{ '#059669' if highlight.marge >= 0 else '#dc2626' }};">{{ amount(highlight.marge) }}</td></tr>
+                      <tr><td style="padding:0 14px 14px;font-size:11px;color:#64748b;">Coût {{ amount(highlight_ventes.cout) }}</td></tr>
+                    </table>
+                  </td>
+                  <td width="25%" valign="top" style="padding:0 6px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                           style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                      <tr><td style="padding:14px 14px 6px;font-size:11px;color:#64748b;font-weight:600;">CHARGES</td></tr>
+                      <tr><td style="padding:0 14px 4px;font-size:19px;font-weight:700;color:#b45309;">{{ amount(highlight.charges) }}</td></tr>
+                      <tr><td style="padding:0 14px 14px;font-size:11px;color:#64748b;">Dépenses validées</td></tr>
+                    </table>
+                  </td>
+                  <td width="25%" valign="top" style="padding:0 0 0 6px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                           style="background:{{ '#ecfdf5' if highlight.resultat >= 0 else '#fef2f2' }};border:1px solid {{ '#a7f3d0' if highlight.resultat >= 0 else '#fecaca' }};border-radius:10px;">
+                      <tr><td style="padding:14px 14px 6px;font-size:11px;color:#64748b;font-weight:600;">RÉSULTAT</td></tr>
+                      <tr><td style="padding:0 14px 4px;font-size:19px;font-weight:700;color:{{ '#059669' if highlight.resultat >= 0 else '#dc2626' }};">{{ amount(highlight.resultat) }}</td></tr>
+                      <tr><td style="padding:0 14px 14px;font-size:11px;color:#64748b;">Marge − charges</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Synthese par devise -->
+          <tr>
+            <td style="padding:26px 32px 0;">
+              <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b;font-weight:700;margin-bottom:10px;">
+                Synthèse par devise
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;overflow:hidden;">
+                <tr style="background:#f1f5f9;">
+                  <th align="left" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Devise</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Ventes</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">CA</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Marge</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Charges</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Résultat</th>
+                </tr>
+                {% for devise in devises %}
+                {% set v = ventes.get(devise, {'ca': 0, 'count': 0, 'marge': 0}) %}
+                {% set r = resultat.get(devise, {'marge': 0, 'charges': 0, 'resultat': 0}) %}
+                <tr>
+                  <td style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;">
+                    <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:11px;font-weight:700;">{{ devise }}</span>
+                  </td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;color:#334155;border-bottom:1px solid #eef2f7;">{{ v.count }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;">{{ money_cell(v.ca, '') }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;color:{{ '#059669' if v.marge >= 0 else '#dc2626' }};">{{ money_cell(v.marge, '') }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;color:#b45309;">{{ money_cell(r.charges, '') }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;color:{{ '#059669' if r.resultat >= 0 else '#dc2626' }};">{{ money_cell(r.resultat, '') }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" style="padding:16px 12px;font-size:13px;color:#64748b;">Aucune activité sur la période.</td></tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+
+          <!-- Top produits -->
+          <tr>
+            <td style="padding:26px 32px 0;">
+              <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b;font-weight:700;margin-bottom:10px;">
+                Meilleures ventes
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;overflow:hidden;">
+                <tr style="background:#f1f5f9;">
+                  <th align="left" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Produit</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Qté</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">CA</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Marge</th>
+                </tr>
+                {% for row in top %}
+                <tr>
+                  <td style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;">
+                    <span style="display:inline-block;width:20px;color:#1d4ed8;font-weight:700;">{{ loop.index }}</span>
+                    {{ row.product.name if row.product else '?' }}
+                  </td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;color:#334155;border-bottom:1px solid #eef2f7;">{{ row.qte }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">{{ amount(row.ca, row.currency) }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;color:{{ '#059669' if row.marge >= 0 else '#dc2626' }};">{{ amount(row.marge, row.currency) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" style="padding:16px 12px;font-size:13px;color:#64748b;">Aucune vente sur la période.</td></tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+
+          <!-- Tresorerie + creances -->
+          <tr>
+            <td style="padding:26px 32px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td width="54%" valign="top" style="padding-right:10px;">
+                    <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b;font-weight:700;margin-bottom:10px;">
+                      Trésorerie
+                    </div>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;overflow:hidden;">
+                      {% for kind, par_dev in tresorerie_nature.items() %}
+                        {% for devise, montant in par_dev.items() %}
+                        <tr>
+                          <td style="padding:9px 12px;font-size:12.5px;border-bottom:1px solid #eef2f7;color:#334155;">{{ movement_labels.get(kind, kind) }}</td>
+                          <td align="right" style="padding:9px 12px;font-size:12.5px;border-bottom:1px solid #eef2f7;color:{{ '#059669' if montant >= 0 else '#dc2626' }};white-space:nowrap;">{{ '+' if montant >= 0 }}{{ amount(montant, devise) }}</td>
+                        </tr>
+                        {% endfor %}
+                      {% else %}
+                      <tr><td style="padding:14px 12px;font-size:13px;color:#64748b;">Aucun mouvement de caisse.</td></tr>
+                      {% endfor %}
+                      {% for devise, total in tresorerie_devise.items() %}
+                      <tr style="background:#f8fafc;">
+                        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#0f172a;">Net {{ devise }}</td>
+                        <td align="right" style="padding:10px 12px;font-size:12px;font-weight:700;color:{{ '#059669' if total >= 0 else '#dc2626' }};white-space:nowrap;">{{ amount(total, devise) }}</td>
+                      </tr>
+                      {% endfor %}
+                    </table>
+                  </td>
+                  <td width="46%" valign="top" style="padding-left:10px;">
+                    <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b;font-weight:700;margin-bottom:10px;">
+                      Créances &amp; dettes
+                    </div>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;overflow:hidden;">
+                      {% for devise, row in creances.items() %}
+                      <tr>
+                        <td style="padding:10px 12px;font-size:12.5px;border-bottom:1px solid #eef2f7;">
+                          <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#dbeafe;color:#1e40af;font-size:11px;font-weight:700;">{{ devise }}</span>
+                        </td>
+                        <td style="padding:10px 12px;font-size:12px;border-bottom:1px solid #eef2f7;color:#334155;">
+                          Clients<br><strong style="color:#059669;">{{ amount(row.client, devise) }}</strong>
+                        </td>
+                        <td style="padding:10px 12px;font-size:12px;border-bottom:1px solid #eef2f7;color:#334155;">
+                          Fournisseurs<br><strong style="color:#dc2626;">{{ amount(row.fournisseur, devise) }}</strong>
+                        </td>
+                      </tr>
+                      {% else %}
+                      <tr><td style="padding:14px 12px;font-size:13px;color:#64748b;">Aucun encours.</td></tr>
+                      {% endfor %}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          {% if expenses %}
+          <!-- Dernieres charges -->
+          <tr>
+            <td style="padding:26px 32px 0;">
+              <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b;font-weight:700;margin-bottom:10px;">
+                Dernières charges validées
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;overflow:hidden;">
+                <tr style="background:#f1f5f9;">
+                  <th align="left" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Date</th>
+                  <th align="left" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Motif</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Montant</th>
+                </tr>
+                {% for exp in expenses %}
+                <tr>
+                  <td style="padding:10px 12px;font-size:12.5px;color:#64748b;border-bottom:1px solid #eef2f7;white-space:nowrap;">{{ exp.expense_date.strftime('%d/%m/%Y') if exp.expense_date else '—' }}</td>
+                  <td style="padding:10px 12px;font-size:12.5px;color:#334155;border-bottom:1px solid #eef2f7;">{{ exp.motif }}</td>
+                  <td align="right" style="padding:10px 12px;font-size:12.5px;border-bottom:1px solid #eef2f7;white-space:nowrap;color:#b45309;">{{ amount(exp.amount, exp.currency) }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+          {% endif %}
+
+          <!-- Pied de page -->
+          <tr>
+            <td style="padding:26px 32px 30px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="border-top:1px solid #e2e8f0;">
+                <tr>
+                  <td style="padding-top:16px;font-size:11.5px;line-height:1.7;color:#64748b;">
+                    Rapport généré automatiquement par <strong style="color:#1e3a8a;">{{ app_name }}</strong>
+                    le {{ generated_at.strftime('%d/%m/%Y à %H:%M') }}.<br>
+                    Les montants restent séparés par devise (CDF / USD) et ne sont pas convertis.<br>
+                    Ce message est destiné au suivi interne de l'activité de la boutique.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

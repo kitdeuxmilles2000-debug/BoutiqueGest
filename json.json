@@ -1,0 +1,19 @@
+{
+  "id": "6047599",
+  "createdAt": "2026-10-24T06:59:04.535Z",
+  "actorID": "user_01M5N6QFQ18B7Z10R90AT7HVM5",
+  "actorLabel": "kitdeuxmilles2000@gmail.com",
+  "source": "console",
+  "resource": "member",
+  "resourceID": "user_01M5N6QFQ18B7Z10R90AT7HVM5",
+  "resourceLabel": "kitdeuxmilles2000@gmail.com",
+  "action": "created",
+  "changes": [
+    {
+      "field": "role",
+      "before": null,
+      "after": "owner"
+    }
+  ],
+  "requestID": "01M5PB9CPXS5EAYV93NCWTHKBT"
+}

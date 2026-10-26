@@ -38,7 +38,7 @@
 - Déclarations fiscales automatisées / plan comptable légal.
 - Paie et gestion du personnel.
 - Boutique publique en ligne, livraison, portail client.
-- Intégrations Mobile Money/bancaires directes (sans étude d'API).
+- Intégrations bancaires directes (sans étude d'API).
 - IA avancée nécessitant un service payant.
 - Multi-entrepôts / multi-boutiques avancé.
 
@@ -86,7 +86,7 @@ réauthentification pour actions sensibles ; **toutes les vérifications refaite
 | 4 | Appareils distants hors LAN | **Consultation seule** au lancement ; saisie de vente réservée au LAN |
 | 5 | Super admin / validateurs | Propriétaire = super admin ; validation déléguée à un gérant |
 | 6 | Ventes à crédit | **Autorisées**, avec **plafond par client** et validation gérant |
-| 7 | Moyens de paiement | Espèces CDF, espèces USD, **Mobile Money (référence)**, mixte, crédit |
+| 7 | Moyens de paiement | Espèces CDF, espèces USD, mixte, crédit |
 | 8 | Devise de référence des rapports | **CDF**, avec **vue USD** et taux affiché |
 | 9 | Taux de change | **Saisi manuellement** (1×/jour), **historique conservé**, jamais recalculé en silence |
 | 10 | Valorisation du stock | **Coût moyen pondéré (CMP)** au lancement ; FIFO prévu en option |

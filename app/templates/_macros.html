@@ -1,0 +1,30 @@
+{% macro show_pager(p) %}
+{% if p.total > 25 %}
+<div class="row" style="justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap">
+  <span class="muted">{{ p.total }} ligne(s) · page {{ p.page }} / {{ p.pages }}</span>
+  <div class="row" style="gap:6px;flex-wrap:wrap">
+    {% if p.has_prev %}
+      <a class="btn ghost sm" href="{{ p.url(1) }}">«</a>
+      <a class="btn ghost sm" href="{{ p.url(p.page - 1) }}">‹ Précédent</a>
+    {% endif %}
+    {% if p.has_next %}
+      <a class="btn ghost sm" href="{{ p.url(p.page + 1) }}">Suivant ›</a>
+      <a class="btn ghost sm" href="{{ p.url(p.pages) }}">»</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro delete_form(action, label="Supprimer", confirm_text="Supprimer définitivement cet élément ?") %}
+<details style="display:inline-block;vertical-align:top">
+  <summary class="btn danger sm" style="list-style:none;cursor:pointer">{{ label }}</summary>
+  <form method="post" action="{{ action }}" onsubmit="return confirm({{ confirm_text | tojson }})"
+        style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="password" name="owner_password" required placeholder="Mot de passe admin" autocomplete="new-password" style="width:170px">
+    <input type="text" name="reason" placeholder="Motif (facultatif)" style="width:170px">
+    <button type="submit" class="btn danger sm">Confirmer</button>
+  </form>
+</details>
+{% endmacro %}

@@ -1,65 +1,221 @@
 {% extends "base.html" %}
-{% block title %}E-mails & rapport{% endblock %}
-{% block heading %}E-mails · Rapport journalier{% endblock %}
+{% from "_macros.html" import show_pager %}
+{% block title %}E-mails & rapports{% endblock %}
+{% block heading %}E-mails · Rapports d'activité{% endblock %}
 
 {% block content %}
+<style>
+  .mail-status { display: inline-flex; align-items: center; gap: 8px; font-size: .82rem; font-weight: 600; }
+  .mail-status .dot { width: 8px; height: 8px; border-radius: 999px; background: currentColor; }
+  .mail-security { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 14px; }
+  .mail-note { font-size: .79rem; color: var(--muted); line-height: 1.6; }
+  .mail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .mail-actions form { margin: 0; }
+  .period-link { display: inline-flex; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: .82rem; font-weight: 600; color: var(--ink); text-decoration: none; }
+  .period-link:hover { background: var(--primary-050); }
+  .mail-preview-frame { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+</style>
+
 <div class="card">
-  <h2>Rapport journalier au propriétaire</h2>
-  <p class="sub">Le rapport est <strong>mis en file</strong> puis envoyé si un serveur SMTP est configuré
-    (<code>SMTP_HOST</code>). Sans SMTP, il reste <strong>en attente</strong> et consultable ici.</p>
+  <div class="card-head">
+    <div>
+      <h2>Configuration d'envoi (SMTP)</h2>
+      <p class="sub" style="margin:3px 0 0">Renseignez le serveur de messagerie utilisé pour envoyer les rapports.
+        Ces paramètres sont enregistrés dans l'application et priment sur les variables d'environnement.</p>
+    </div>
+    {% if smtp_configured %}
+    <span class="badge green">Configuré · {{ smtp.host }}:{{ smtp.port }}</span>
+    {% else %}
+    <span class="badge amber">Non configuré</span>
+    {% endif %}
+  </div>
+
   {% if not smtp_configured %}
-  <div class="alert warning">SMTP non configuré : les messages restent en attente. Renseignez les variables
-    <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code> pour un envoi réel.</div>
+  <div class="alert warning">
+    Aucun serveur SMTP n'est encore renseigné : les rapports restent <strong>en attente</strong> dans la file d'envoi.
+    Complétez le formulaire ci-dessous puis testez la connexion.
+  </div>
   {% endif %}
-  <form method="post" action="{{ url_for('admin.outbox_queue_report') }}">
+
+  <form method="post" action="{{ url_for('admin.outbox_save_config') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <label style="flex:1;min-width:240px">Destinataire
-        <input type="email" name="to_address" value="{{ report_to }}" placeholder="proprietaire@exemple.com" required>
-      </label>
-      <button class="btn">Mettre en file d'attente</button>
+    <div class="grid cols-3">
+      <div class="field">
+        <label for="smtp_host">Serveur SMTP</label>
+        <input type="text" id="smtp_host" name="smtp_host" value="{{ smtp.host or '' }}"
+               placeholder="smtp.gmail.com" autocomplete="off">
+        <p class="hint">Nom d'hôte uniquement, sans « smtp:// ».</p>
+      </div>
+      <div class="field">
+        <label for="smtp_port">Port</label>
+        <input type="number" id="smtp_port" name="smtp_port" value="{{ smtp.port or 587 }}"
+               min="1" max="65535" placeholder="587">
+        <p class="hint">587 (STARTTLS), 465 (SSL) ou 25 (réseau local).</p>
+      </div>
+      <div class="field">
+        <label for="smtp_security">Sécurité</label>
+        <select id="smtp_security" name="smtp_security">
+          {% for code, label in security_labels.items() %}
+          <option value="{{ code }}" {% if smtp.security == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="hint">Doit correspondre au port utilisé.</p>
+      </div>
+      <div class="field">
+        <label for="smtp_user">Identifiant / utilisateur</label>
+        <input type="text" id="smtp_user" name="smtp_user" value="{{ smtp.user or '' }}"
+               placeholder="adresse@exemple.com" autocomplete="off">
+        <p class="hint">Souvent l'adresse e-mail complète.</p>
+      </div>
+      <div class="field">
+        <label for="smtp_password">Mot de passe / clé d'application</label>
+        <input type="password" id="smtp_password" name="smtp_password" value=""
+               placeholder="{% if smtp.password %}•••••••• (laisser vide pour conserver){% else %}Mot de passe SMTP{% endif %}"
+               autocomplete="new-password">
+        <p class="hint">Le mot de passe n'est jamais réaffiché. Vide = conserver l'actuel.</p>
+      </div>
+      <div class="field">
+        <label for="smtp_sender">Expéditeur affiché</label>
+        <input type="email" id="smtp_sender" name="smtp_sender" value="{{ smtp.sender or '' }}"
+               placeholder="boutique@exemple.com" autocomplete="off">
+        <p class="hint">Adresse utilisée dans le champ « De ». Vide = identifiant.</p>
+      </div>
+    </div>
+
+    <div class="grid cols-3" style="margin-top:2px">
+      <div class="field">
+        <label for="report_email_to">Destinataire des rapports</label>
+        <input type="email" id="report_email_to" name="report_email_to" value="{{ report_to or '' }}"
+               placeholder="proprietaire@exemple.com" autocomplete="off">
+        <p class="hint">Adresse qui reçoit le rapport après la clôture de caisse.</p>
+      </div>
+      <div class="field" style="display:flex;align-items:flex-end">
+        <label class="row" style="gap:9px;align-items:center;font-weight:600;font-size:.84rem;margin:0 0 4px">
+          <input type="checkbox" name="report_auto_send" value="1" {% if auto_send %}checked{% endif %}
+                 style="width:auto">
+          Envoyer automatiquement le rapport après la clôture de caisse
+        </label>
+      </div>
+      <div class="field" style="display:flex;align-items:flex-end">
+        <button class="btn block" type="submit">Enregistrer la configuration</button>
+      </div>
     </div>
   </form>
+
+  <div class="mail-actions" style="margin-top:6px;padding-top:14px;border-top:1px solid var(--line)">
+    <form method="post" action="{{ url_for('admin.outbox_test_connection') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn ghost" type="submit">Tester la connexion</button>
+    </form>
+    <form method="post" action="{{ url_for('admin.outbox_test_email') }}" class="row" style="gap:8px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="email" name="to_address" value="{{ report_to or '' }}" placeholder="Adresse de test"
+             autocomplete="off" style="width:230px">
+      <button class="btn ghost" type="submit">Envoyer un e-mail de test</button>
+    </form>
+    <span class="mail-note">Le test nécessite un serveur configuré et enregistré.</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Générer un rapport</h2>
+      <p class="sub" style="margin:3px 0 0">Le rapport reprend les ventes, marges, charges, trésorerie, créances
+        et meilleures ventes de la période. Il est envoyé en HTML, avec une version texte de secours.</p>
+    </div>
+    <div class="row" style="gap:6px">
+      {% for code, label in periode_labels.items() %}
+      <a class="period-link" href="{{ url_for('admin.outbox_preview', periode=code) }}" target="_blank"
+         rel="noopener">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('admin.outbox_queue_report') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid cols-3">
+      <div class="field">
+        <label for="report_periode">Période du rapport</label>
+        <select id="report_periode" name="periode">
+          {% for code, label in periode_labels.items() %}
+          <option value="{{ code }}" {% if default_periode == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="hint">« Aujourd'hui » correspond au rapport journalier.</p>
+      </div>
+      <div class="field">
+        <label for="report_to">Destinataire</label>
+        <input type="email" id="report_to" name="to_address" value="{{ report_to or '' }}"
+               placeholder="proprietaire@exemple.com" required autocomplete="off">
+        <p class="hint">Cette adresse devient le destinataire par défaut.</p>
+      </div>
+      <div class="field" style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+        <label class="row" style="gap:8px;align-items:center;font-weight:600;font-size:.84rem;margin:0 0 4px">
+          <input type="checkbox" name="send_now" value="1" style="width:auto">
+          Envoyer immédiatement
+        </label>
+        <button class="btn" type="submit">Mettre en file d'attente</button>
+      </div>
+    </div>
+  </form>
+
   <div class="row between mt-16">
-    <p class="hint">Les réseaux sociaux et l'envoi automatique programmé peuvent être branchés ultérieurement ; le cœur reste local.</p>
+    <p class="mail-note" style="margin:0">
+      Sans envoi immédiat, le rapport reste dans la file ci-dessous jusqu'au prochain envoi.
+      {% if not smtp_configured %}<strong>SMTP non configuré :</strong> l'envoi échouera et l'erreur sera tracée.{% endif %}
+    </p>
     <form method="post" action="{{ url_for('admin.outbox_send') }}" style="margin:0">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn">Envoyer les messages en attente</button>
+      <button class="btn ghost" type="submit">Envoyer tous les messages en attente</button>
     </form>
   </div>
 </div>
 
 <div class="card">
-  <h2>File d'envoi</h2>
+  <div class="card-head">
+    <div>
+      <h2>File d'envoi</h2>
+      <p class="sub" style="margin:3px 0 0">Historique des rapports et e-mails de test, avec leur statut et les erreurs éventuelles.</p>
+    </div>
+    <span class="badge gray">{{ pager.total }} message(s)</span>
+  </div>
+
   <div class="table-wrap">
     <table class="table">
       <thead>
-        <tr><th>Créé le</th><th>Destinataire</th><th>Objet</th><th>Statut</th><th>Essais</th><th></th></tr>
+        <tr><th>Créé le</th><th>Destinataire</th><th>Objet</th><th>Statut</th><th>Essais</th><th>Actions</th></tr>
       </thead>
       <tbody>
         {% for m in messages %}
         <tr>
-          <td>{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td style="white-space:nowrap">{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
           <td>{{ m.to_address }}</td>
           <td>{{ m.subject }}</td>
-          <td><span class="badge {{ OUTBOX_STATUS_BADGES.get(m.status, 'gray') }}">{{ status_labels.get(m.status, m.status) }}</span>
-            {% if m.last_error %}<br><span class="muted" style="font-size:.8rem">{{ m.last_error }}</span>{% endif %}
+          <td>
+            <span class="badge {{ OUTBOX_STATUS_BADGES.get(m.status, 'gray') }}">{{ status_labels.get(m.status, m.status) }}</span>
+            {% if m.last_error %}<br><span class="muted" style="font-size:.78rem">{{ m.last_error }}</span>{% endif %}
           </td>
           <td>{{ m.attempts }}</td>
           <td>
-            {% if m.status != 'envoye' %}
-            <form method="post" action="{{ url_for('admin.outbox_resend', message_id=m.id) }}" style="margin:0">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn ghost sm">Renvoyer</button>
-            </form>
-            {% endif %}
+            <div class="row" style="gap:6px;flex-wrap:wrap">
+              <a class="btn ghost sm" href="{{ url_for('admin.outbox_message_preview', message_id=m.id) }}"
+                 target="_blank" rel="noopener">Aperçu</a>
+              {% if m.status != 'envoye' %}
+              <form method="post" action="{{ url_for('admin.outbox_resend', message_id=m.id) }}" style="margin:0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn ghost sm">Renvoyer</button>
+              </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="muted">Aucun message.</td></tr>
+        <tr><td colspan="6" class="muted">Aucun message pour le moment.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {{ show_pager(pager) }}
 </div>
 {% endblock %}

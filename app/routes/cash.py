@@ -7,9 +7,11 @@ from app.models.sales import (
     CASH_IN_KINDS,
     CASH_MOVEMENT_LABELS,
     CASH_SESSION_STATUS_LABELS,
+    CashMovement,
     CashMovementKind,
     CashSession,
     CashSessionStatus,
+    Sale,
 )
 from app.models.user import get_setting
 from app.security.audit import log_action
@@ -17,6 +19,7 @@ from app.security.decorators import permission_required
 from app.security.permissions import P
 from app.services import cash as cash_service
 from app.services import settings as settings_service
+from app.services.pagination import paginate
 from app.services.stock import dec
 
 cash_bp = Blueprint("cash", __name__, url_prefix="/caisse")
@@ -43,13 +46,14 @@ def index():
     query = CashSession.query
     if not _can_view_all():
         query = query.filter_by(vendeur_id=current_user.id)
-    sessions = query.order_by(CashSession.opened_at.desc()).limit(50).all()
+    pager = paginate(query.order_by(CashSession.opened_at.desc()))
 
     return render_template(
         "cash/index.html",
         own_session=own,
         registers=registers,
-        sessions=sessions,
+        pager=pager,
+        sessions=pager.items,
         labels=CASH_SESSION_STATUS_LABELS,
     )
 
@@ -90,10 +94,22 @@ def open_session():
 def session_detail(session_id):
     session = _load_session(session_id)
     theorique = session.compute_theorique()
+    movements_pager = paginate(
+        CashMovement.query.filter_by(session_id=session.id).order_by(CashMovement.created_at.desc()),
+        key="mpage",
+    )
+    sales_pager = paginate(
+        Sale.query.filter_by(cash_session_id=session.id).order_by(Sale.created_at.desc()),
+        key="spage",
+    )
     return render_template(
         "cash/session.html",
         session=session,
         theorique=theorique,
+        movements=movements_pager.items,
+        movements_pager=movements_pager,
+        sales=sales_pager.items,
+        sales_pager=sales_pager,
         labels=CASH_MOVEMENT_LABELS,
         statuses=CASH_SESSION_STATUS_LABELS,
     )
@@ -184,19 +200,35 @@ def validate_session(session_id):
         after={"ecart": str(session.ecart)},
         commit=False,
     )
-
-    # Rapport journalier : mise en file apres cloture validee (envoi si SMTP configure)
-    report_to = get_setting("report_email_to", "")
-    if report_to:
-        try:
-            settings_service.queue_daily_report(report_to, user_id=current_user.id, commit=False)
-            flash(
-                "Rapport journalier mis en file d'attente (envoi depuis Administration > E-mails).",
-                "success",
-            )
-        except Exception:  # noqa: BLE001 - ne jamais bloquer la cloture
-            db.session.rollback()
-
     db.session.commit()
     flash("Cloture validee.", "success")
+
+    # Rapport journalier : mise en file apres cloture validee (envoi si SMTP configure
+    # et si l'envoi immediat est active dans Administration > E-mails).
+    report_to = get_setting(settings_service.REPORT_TO_SETTING, "")
+    auto_send = get_setting(settings_service.REPORT_AUTO_SEND_SETTING, "0") == "1"
+    if report_to:
+        try:
+            settings_service.queue_daily_report(report_to, user_id=current_user.id)
+            flash(
+                "Rapport journalier mis en file d'attente (Administration > E-mails).",
+                "success",
+            )
+            if auto_send and settings_service.smtp_configured():
+                sent, errors = settings_service.send_pending()
+                if errors:
+                    flash(
+                        "Rapport prepare mais non envoye : verifiez la configuration SMTP.",
+                        "warning",
+                    )
+                else:
+                    flash(f"Rapport envoye a {report_to}.", "success")
+        except Exception:  # noqa: BLE001 - ne jamais bloquer la cloture
+            db.session.rollback()
+            flash(
+                "La cloture est validee, mais le rapport n'a pas pu etre prepare. "
+                "Verifiez la configuration e-mail.",
+                "warning",
+            )
+
     return redirect(url_for("cash.session_detail", session_id=session.id))

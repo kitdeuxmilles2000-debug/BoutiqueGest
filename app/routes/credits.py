@@ -19,6 +19,7 @@ from app.security.decorators import permission_required
 from app.security.permissions import P
 from app.services import cash as cash_service
 from app.services import finance as finance_service
+from app.services.pagination import paginate
 from app.services.stock import dec
 
 credits_bp = Blueprint("credits", __name__, url_prefix="/credits")
@@ -59,7 +60,8 @@ def index():
         query = query.filter_by(type=credit_type)
     if status:
         query = query.filter_by(status=status)
-    credits = query.order_by(Credit.created_at.desc()).limit(200).all()
+    pager = paginate(query.order_by(Credit.created_at.desc()))
+    credits = pager.items
 
     en_cours = [c for c in credits if c.status != "solde"]
     total_client = sum((c.amount_remaining for c in en_cours if c.is_client), start=dec(0))
@@ -67,6 +69,7 @@ def index():
 
     return render_template(
         "credits/index.html",
+        pager=pager,
         credits=credits,
         type_labels=CREDIT_TYPE_LABELS,
         status_labels=CREDIT_STATUS_LABELS,

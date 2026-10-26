@@ -48,7 +48,7 @@ OUTBOX_STATUS_LABELS = {
 OUTBOX_STATUS_BADGES = {
     OutboxStatus.EN_ATTENTE: "amber",
     OutboxStatus.ENVOYE: "green",
-    OutboxStatus.ERREUR: "rouge",
+    OutboxStatus.ERREUR: "red",
 }
 
 
@@ -60,6 +60,7 @@ class OutboxMessage(BaseModel):
     to_address = db.Column(db.String(255), nullable=False, index=True)
     subject = db.Column(db.String(255), nullable=False)
     body = db.Column(db.Text, nullable=False)
+    body_html = db.Column(db.Text)
     kind = db.Column(db.String(40), default="rapport", nullable=False)
 
     status = db.Column(db.String(20), default=OutboxStatus.EN_ATTENTE, nullable=False, index=True)

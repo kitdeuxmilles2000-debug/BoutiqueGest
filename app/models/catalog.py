@@ -9,6 +9,8 @@ class UnitKind:
     VOLUME = "volume"
     CAPACITY = "contenance"
     PIECE = "piece"
+    POIDS = "poids"
+    LONGUEUR = "longueur"
 
 
 class ProductKind:
@@ -54,6 +56,10 @@ class Product(BaseModel):
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"))
     base_unit_id = db.Column(db.Integer, db.ForeignKey("units.id"), nullable=False)
     kind = db.Column(db.String(20), default=ProductKind.AUTRE, nullable=False)
+    famille = db.Column(db.String(80), index=True)
+    couleur = db.Column(db.String(40), index=True)
+    type_mesure = db.Column(db.String(20), default="autre", nullable=False)
+    marge_cible = db.Column(db.Numeric(5, 2))
 
     currency = db.Column(db.String(3), default="CDF", nullable=False)
     cost_avg = db.Column(db.Numeric(18, 2), default=Decimal("0"), nullable=False)

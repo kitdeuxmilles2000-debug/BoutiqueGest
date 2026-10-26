@@ -33,6 +33,10 @@ DEFAULT_UNITS = [
     ("CASIER", "Casier", UnitKind.CAPACITY),
     ("CARTON", "Carton", UnitKind.CAPACITY),
     ("SACHET", "Sachet", UnitKind.CAPACITY),
+    ("G", "Gramme", UnitKind.POIDS),
+    ("KG", "Kilogramme", UnitKind.POIDS),
+    ("CM", "Centimètre", UnitKind.LONGUEUR),
+    ("M", "Mètre", UnitKind.LONGUEUR),
 ]
 
 DEFAULT_CATEGORIES = ["Boisson", "Eau", "Lait", "Accessoire"]

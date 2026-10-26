@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Réinitialiser la base{% endblock %}
+{% block heading %}Réinitialiser la base{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Réinitialisation de la base</h2>
+      <p class="sub">Efface toutes les opérations pour repartir sur une base propre. Une sauvegarde complète est
+        créée automatiquement avant l'effacement.</p>
+    </div>
+    <span class="badge red">Action irréversible</span>
+  </div>
+
+  <div class="alert danger" style="margin-top:12px">
+    <strong>À lire avant de continuer.</strong>
+    Toutes les ventes, achats, crédits, mouvements de stock, sessions de caisse, dépenses, notifications et le
+    journal d'audit seront supprimés. Les utilisateurs, rôles, unités, catégories, caisses, taux de change et
+    paramètres sont conservés.
+  </div>
+
+  <div class="table-wrap mt-16">
+    <table class="table">
+      <thead><tr><th>Élément qui sera supprimé</th><th class="num">Quantité</th></tr></thead>
+      <tbody>
+        {% for label, count in counts.items() %}
+        <tr>
+          <td>{{ label }}</td>
+          <td class="num">{{ count }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="2" class="muted">Base déjà vide.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><th>Total des lignes concernées</th><th class="num">{{ total }}</th></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <form method="post" action="{{ url_for('admin.reset_database') }}" class="mt-16"
+        onsubmit="return confirm('Dernière vérification : effacer définitivement toutes les opérations ?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="section-title">Portée de la réinitialisation</div>
+    <label class="row" style="gap:8px; align-items:flex-start">
+      <input type="checkbox" name="include_catalog" {{ 'checked' if include_catalog }}>
+      <span>Supprimer aussi le <strong>catalogue</strong> (produits, unités de vente, historique des prix).
+        Les catégories et les unités de mesure globales restent.</span>
+    </label>
+    <label class="row" style="gap:8px; align-items:flex-start; margin-top:8px">
+      <input type="checkbox" name="include_partners" {{ 'checked' if include_partners }}>
+      <span>Supprimer aussi les <strong>clients et fournisseurs</strong>.</span>
+    </label>
+    <p class="hint">Sans ces cases, les produits restent en catalogue et leur stock est remis à zéro.</p>
+
+    <div class="section-title">Double protection</div>
+    <div class="field full">
+      <label for="owner_password">Mot de passe administrateur / propriétaire (obligatoire)</label>
+      <input type="password" id="owner_password" name="owner_password" required autocomplete="current-password">
+    </div>
+    <div class="field full">
+      <label for="magic_word">Phrase magique de réinitialisation (obligatoire)</label>
+      <input type="text" id="magic_word" name="magic_word" required autocomplete="off"
+             placeholder="Écrivez la phrase convenue">
+      <p class="hint">La phrase doit correspondre exactement à celle convenue avec le propriétaire.</p>
+    </div>
+    <div class="field full">
+      <label for="reason">Motif (facultatif, conservé dans le journal d'audit)</label>
+      <input type="text" id="reason" name="reason" placeholder="Ex. fin d'année, remise à zéro des essais">
+    </div>
+
+    <label class="row" style="gap:8px; margin-top:12px">
+      <input type="checkbox" name="confirm_reset" required>
+      Je comprends que cette opération est définitive et qu'elle ne peut être annulée qu'en restaurant la
+      sauvegarde créée automatiquement.
+    </label>
+
+    <div class="row" style="gap:10px; margin-top:18px">
+      <button type="submit" class="btn danger">Réinitialiser la base</button>
+      <a href="{{ url_for('admin.backups') }}" class="btn ghost">Voir les sauvegardes</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

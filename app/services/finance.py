@@ -1,5 +1,5 @@
 """Logique finance : depenses, credits (clients/fournisseurs), echeances et reglements."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from app.extensions import db
@@ -16,6 +16,7 @@ from app.models.finance import (
 )
 from app.models.sales import CashMovementKind
 from app.services import cash as cash_service
+from app.services import notifications as notifications_service
 from app.services.stock import dec
 
 
@@ -100,6 +101,25 @@ def reject_expense(expense, user_id, reason, commit=True):
 
 
 # ---------------------------------------------------------------- Credits
+def coerce_date(value):
+    """Accepte une date, un datetime ou une chaine (AAAA-MM-JJ / JJ/MM/AAAA)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError("Date d'echeance invalide : utilisez le format AAAA-MM-JJ.")
+
+
 def create_credit(
     *,
     credit_type,
@@ -115,6 +135,8 @@ def create_credit(
     commit=True,
 ):
     amount = dec(amount)
+    if amount <= 0:
+        raise ValueError("Le montant du credit doit etre positif.")
     credit = Credit(
         type=credit_type,
         customer_id=customer.id if customer else None,
@@ -123,7 +145,7 @@ def create_credit(
         amount_remaining=amount,
         currency=currency,
         status=CreditStatus.ACTIF,
-        due_date=due_date,
+        due_date=coerce_date(due_date),
         sale_id=sale.id if sale else None,
         notes=notes,
         created_by_id=user_id,
@@ -132,7 +154,7 @@ def create_credit(
     db.session.flush()
 
     for inst in installments or []:
-        due = inst.get("due_date")
+        due = coerce_date(inst.get("due_date"))
         amount_due = dec(inst.get("amount_due"))
         if due is None or amount_due <= 0:
             continue
@@ -196,6 +218,11 @@ def add_settlement(
 
     refresh_credit_status(credit)
     refresh_installments(credit)
+
+    # Notification : dette soldée (créance remboursée intégralement)
+    if credit.status == CreditStatus.SOLDE:
+        notifications_service.notify_debt_paid(credit, amount=amount, commit=False)
+
     if commit:
         db.session.commit()
     return settlement

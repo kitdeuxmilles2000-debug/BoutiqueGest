@@ -60,7 +60,7 @@
       </a>
       {% endif %}
       {% if current_user.is_authenticated and current_user.has_permission(P.EXPENSES_VIEW) %}
-      <a href="{{ url_for('expenses.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('expenses.') }}">
+      <a href="{{ url_for('reports.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('reports.') }}">
         <span class="ico">🧾</span> Dépenses
       </a>
       {% endif %}
@@ -102,6 +102,11 @@
         <span class="ico">💾</span> Sauvegardes
       </a>
       {% endif %}
+      {% if current_user.has_permission(P.SETTINGS_MANAGE) %}
+      <a href="{{ url_for('admin.reset_database') }}" class="{{ 'active' if request.endpoint == 'admin.reset_database' }}">
+        <span class="ico">🧹</span> Réinitialiser la base
+      </a>
+      {% endif %}
       {% if current_user.has_permission(P.SYNC_MANAGE) %}
       <a href="{{ url_for('admin.sync') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.sync') }}">
         <span class="ico">🔁</span> Synchronisation
@@ -110,6 +115,9 @@
       {% if current_user.has_permission(P.SETTINGS_MANAGE) %}
       <a href="{{ url_for('admin.exchange_rate') }}" class="{{ 'active' if request.endpoint == 'admin.exchange_rate' }}">
         <span class="ico">💱</span> Taux de change
+      </a>
+      <a href="{{ url_for('admin.pricing') }}" class="{{ 'active' if request.endpoint == 'admin.pricing' }}">
+        Prix et marges
       </a>
       <a href="{{ url_for('admin.outbox') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.outbox') }}">
         <span class="ico">✉️</span> E-mails &amp; rapport
@@ -133,6 +141,19 @@
       </div>
       <div class="row" style="gap:14px">
         {% if current_user.is_authenticated %}
+          <div class="notif-wrap">
+            <button type="button" class="notif-bell" id="notifBell" title="Notifications" aria-label="Notifications">
+              <span class="notif-ico">🔔</span>
+              <span class="notif-badge" id="notifBadge">0</span>
+            </button>
+            <div class="notif-dropdown" id="notifDropdown">
+              <div class="notif-dropdown-head">
+                <strong>Notifications</strong>
+                <button type="button" class="btn ghost sm" id="notifMarkAll">Tout marquer lu</button>
+              </div>
+              <div class="notif-dropdown-list" id="notifDropdownList"></div>
+            </div>
+          </div>
           <span class="who">Connecté : <strong>{{ current_user.full_name }}</strong>
             <span class="badge blue">{{ current_user.role.label if current_user.role else '—' }}</span>
           </span>
@@ -182,5 +203,9 @@
   })();
 </script>
 <script src="{{ url_for('static', filename='js/system-status.js') }}"></script>
+<div id="notifBox" class="notif-box" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9999"></div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notifications.css') }}">
+<script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+
 </body>
 </html>

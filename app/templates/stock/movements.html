@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import show_pager %}
 {% block title %}Mouvements de stock{% endblock %}
 {% block heading %}Mouvements de stock{% endblock %}
 
@@ -44,6 +45,7 @@
         {% endfor %}
       </tbody>
     </table>
+  {{ show_pager(pager) }}
   </div>
 </div>
 {% endblock %}

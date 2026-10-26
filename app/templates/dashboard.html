@@ -40,6 +40,18 @@
 </div>
 {% endif %}
 
+{% if resultat_jour %}
+<div class="grid cols-3">
+  {% for cur, r in resultat_jour.items() %}
+  <div class="card kpi">
+    <span class="label">Résultat du jour ({{ cur }})</span>
+    <span class="value {{ 'accent' if r.resultat >= 0 else '' }}">{{ r.resultat | num }} {{ cur }}</span>
+    <span class="foot">Marge brute {{ r.marge | num }} − charges validées {{ r.charges | num }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="grid cols-4">
   <div class="card kpi">
     <span class="label">Ventes du jour (par devise)</span>

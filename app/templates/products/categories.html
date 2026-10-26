@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import delete_form %}
 {% block title %}Catégories{% endblock %}
 {% block heading %}Catégories{% endblock %}
 
@@ -9,12 +10,16 @@
     <p class="sub">{{ categories|length }} catégorie(s).</p>
     <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>Nom</th><th>Produits</th></tr></thead>
+        <thead><tr><th>Nom</th><th>Produits</th><th></th></tr></thead>
         <tbody>
           {% for c in categories %}
-          <tr><td>{{ c.name }}<br><span class="pill">{{ c.description or '' }}</span></td><td>{{ c.products|length }}</td></tr>
+          <tr>
+            <td>{{ c.name }}<br><span class="pill">{{ c.description or '' }}</span></td>
+            <td>{{ c.products|length }}</td>
+            <td>{% if current_user.has_permission(P.PRODUCTS_MANAGE) %}{{ delete_form(url_for('products.delete_category', category_id=c.id), confirm_text='Supprimer la catégorie ' ~ c.name ~ ' ?') }}{% endif %}</td>
+          </tr>
           {% else %}
-          <tr><td colspan="2" class="muted">Aucune catégorie.</td></tr>
+          <tr><td colspan="3" class="muted">Aucune catégorie.</td></tr>
           {% endfor %}
         </tbody>
       </table>

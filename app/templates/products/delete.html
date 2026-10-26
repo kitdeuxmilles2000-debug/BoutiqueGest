@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Supprimer {{ product.name }}{% endblock %}
+{% block heading %}Supprimer le produit{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>{{ product.name }} <code class="pill">{{ product.code }}</code></h2>
+      <p class="sub">{{ product.category.name if product.category else 'Sans catégorie' }} ·
+        devise {{ product.currency }} · {{ 'Actif' if product.active else 'Inactif' }}</p>
+    </div>
+    <div class="row" style="gap:8px">
+      <span class="badge {{ 'green' if impact.stock_qty > 0 else 'amber' }}">
+        {{ 'En stock' if impact.stock_qty > 0 else 'En attente / sans stock validé' }}
+      </span>
+      <a href="{{ url_for('products.detail', product_id=product.id) }}" class="btn ghost sm">Retour à la fiche</a>
+    </div>
+  </div>
+
+  {% if impact.has_operations %}
+  <div class="alert danger" style="margin-top:16px">
+    <strong>Attention : ce produit a des opérations enregistrées.</strong>
+    La suppression annulera définitivement toutes les ventes, encaissements et mouvements de caisse liés à ce produit.
+    Les crédits associés seront également supprimés. <strong>Cette opération est irréversible.</strong>
+  </div>
+  {% else %}
+  <div class="alert warning" style="margin-top:16px">
+    Ce produit n'a aucune opération de vente. La suppression reste <strong>définitive et irréversible</strong> :
+    stock, lots, demandes d'entrée et historiques seront perdus.
+  </div>
+  {% endif %}
+
+  <div class="table-wrap mt-16">
+    <table class="table">
+      <thead><tr><th>Élément lié</th><th>Quantité supprimée</th></tr></thead>
+      <tbody>
+        <tr><td>Stock validé actuel</td><td class="num">{{ impact.stock_qty | qty }} {{ product.base_unit.code if product.base_unit }}</td></tr>
+        <tr><td>Demandes d'entrée (en attente / historique)</td><td class="num">{{ impact.pending_entries }}</td></tr>
+        <tr><td>Mouvements de stock</td><td class="num">{{ impact.movements }}</td></tr>
+        <tr><td>Lots</td><td class="num">{{ impact.batches }}</td></tr>
+        <tr><td>Lignes d'inventaire</td><td class="num">{{ impact.inventory_lines }}</td></tr>
+        <tr><td>Ventes annulées</td><td class="num">{{ impact.sales }}</td></tr>
+        <tr><td>Lignes de vente supprimées</td><td class="num">{{ impact.sale_lines }}</td></tr>
+        <tr><td>Paiements supprimés</td><td class="num">{{ impact.payments }}</td></tr>
+        <tr><td>Remboursements supprimés</td><td class="num">{{ impact.refunds }}</td></tr>
+        <tr><td>Mouvements de caisse annulés</td><td class="num">{{ impact.cash_movements }}</td></tr>
+        <tr><td>Crédits liés supprimés</td><td class="num">{{ impact.credits }}</td></tr>
+        <tr><td>Règlements de crédit supprimés</td><td class="num">{{ impact.settlements }}</td></tr>
+        <tr><td>Lignes d'achat supprimées</td><td class="num">{{ impact.purchase_lines }}</td></tr>
+        <tr><td>Achats supprimés (devenus vides)</td><td class="num">{{ impact.purchases_removed }}</td></tr>
+        <tr><td>Historique des prix</td><td class="num">{{ impact.price_history }}</td></tr>
+        <tr><td>Unités de vente</td><td class="num">{{ impact.product_units }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" class="mt-16">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="field full">
+      <label for="reason">Motif de la suppression (optionnel, conservé dans le journal d'audit)</label>
+      <input type="text" id="reason" name="reason" placeholder="Ex. produit créé par erreur, doublon, référence obsolète">
+    </div>
+
+    {% if needs_password %}
+    <div class="field full">
+      <label for="owner_password">Mot de passe administrateur / propriétaire (obligatoire)</label>
+      <input type="password" id="owner_password" name="owner_password" required autocomplete="current-password">
+    </div>
+    {% endif %}
+
+    <label class="row" style="gap:8px; margin-top:12px">
+      <input type="checkbox" name="confirm_irreversible" required>
+      Je comprends que la suppression est définitive et que toutes les opérations liées seront annulées.
+    </label>
+
+    <div class="row" style="gap:10px; margin-top:18px">
+      <button type="submit" class="btn danger">Supprimer définitivement</button>
+      <a href="{{ url_for('products.detail', product_id=product.id) }}" class="btn ghost">Annuler</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

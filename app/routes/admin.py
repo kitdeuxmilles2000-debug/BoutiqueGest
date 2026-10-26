@@ -4,6 +4,7 @@ from datetime import datetime
 
 from flask import (
     Blueprint,
+    Response,
     current_app,
     flash,
     redirect,
@@ -19,12 +20,20 @@ from app.models.audit import AuditLog
 from app.models.settings import OUTBOX_STATUS_LABELS, OutboxMessage
 from app.models.user import Role, User, get_setting, set_setting
 from app.security.audit import log_action
-from app.security.decorators import owner_only, owner_reauth_required, permission_required
+from app.security.decorators import (
+    admin_password_required,
+    owner_only,
+    owner_reauth_required,
+    permission_required,
+)
 from app.security.permissions import P
 from app.services import backup as backup_service
 from app.services import db_history as db_history_service
+from app.services import reset as reset_service
 from app.services import settings as settings_service
 from app.services import sync as sync_service
+from app.services.pagination import paginate
+from app.services.reports import PERIODE_LABELS
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -33,8 +42,8 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 @login_required
 @permission_required(P.USERS_VIEW)
 def users():
-    all_users = User.query.order_by(User.username).all()
-    return render_template("admin/users.html", users=all_users)
+    pager = paginate(User.query.order_by(User.username))
+    return render_template("admin/users.html", users=pager.items, pager=pager)
 
 
 @admin_bp.route("/users/new", methods=["GET", "POST"])
@@ -281,6 +290,98 @@ def exchange_rate():
     )
 
 
+# ------------------------------------------------------------ Prix et marges
+@admin_bp.route("/prix", methods=["GET", "POST"])
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+def pricing():
+    from decimal import Decimal, InvalidOperation
+
+    from app.models.user import set_setting
+    from app.services import pricing as pricing_service
+
+    if request.method == "POST":
+        raw = (request.form.get("marge_objectif_defaut") or "").strip().replace(",", ".")
+        try:
+            value = Decimal(raw)
+        except (InvalidOperation, ValueError):
+            value = None
+        if value is None or not (0 <= value < 100):
+            flash("L'objectif de marge doit être un nombre entre 0 et 99 %.", "danger")
+        else:
+            set_setting(pricing_service.TARGET_MARGIN_SETTING, str(value))
+            db.session.commit()
+            flash(f"Objectif de marge par défaut : {value} %.", "success")
+        return redirect(url_for("admin.pricing"))
+
+    return render_template(
+        "admin/pricing.html",
+        marge_objectif=pricing_service.default_target_margin(),
+    )
+
+
+# ------------------------------------------------ Reinitialisation de la base
+@admin_bp.route("/reinitialiser", methods=["GET", "POST"])
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+@admin_password_required()
+def reset_database():
+    include_catalog = bool(request.form.get("include_catalog"))
+    include_partners = bool(request.form.get("include_partners"))
+
+    if request.method == "POST":
+        if not reset_service.magic_word_ok(request.form.get("magic_word")):
+            log_action(
+                "database_reset_refused",
+                entity="database",
+                reason="phrase magique incorrecte",
+                commit=True,
+            )
+            flash(
+                "Réinitialisation refusée : phrase magique incorrecte. "
+                "Écrivez exactement « clovis est une fleur ».",
+                "danger",
+            )
+            return redirect(url_for("admin.reset_database"))
+
+        try:
+            meta = backup_service.create_backup(label="avant_reinitialisation")
+        except RuntimeError as exc:
+            flash(f"Réinitialisation annulée : sauvegarde impossible ({exc}).", "danger")
+            return redirect(url_for("admin.reset_database"))
+        if not meta.get("valid"):
+            flash("Réinitialisation annulée : la sauvegarde de sécurité est invalide.", "danger")
+            return redirect(url_for("admin.reset_database"))
+
+        summary = reset_service.reset_operations(
+            include_catalog=include_catalog, include_partners=include_partners
+        )
+        log_action(
+            "database_reset",
+            entity="database",
+            after={"sauvegarde": meta["filename"], "supprime": summary},
+            reason=(request.form.get("reason") or "").strip() or None,
+            commit=True,
+        )
+        flash(
+            "Base réinitialisée : toutes les opérations ont été supprimées. "
+            f"Sauvegarde de sécurité : {meta['filename']}.",
+            "success",
+        )
+        return redirect(url_for("main.dashboard"))
+
+    counts = reset_service.collect_counts(
+        include_catalog=include_catalog, include_partners=include_partners
+    )
+    return render_template(
+        "admin/reset.html",
+        counts=counts,
+        total=sum(counts.values()),
+        include_catalog=include_catalog,
+        include_partners=include_partners,
+    )
+
+
 def _parse_date(value):
     if not value:
         return None
@@ -295,13 +396,128 @@ def _parse_date(value):
 @login_required
 @permission_required(P.SETTINGS_MANAGE)
 def outbox():
-    messages = OutboxMessage.query.order_by(OutboxMessage.created_at.desc()).limit(100).all()
+    smtp = settings_service.smtp_config()
+    pager = paginate(OutboxMessage.query.order_by(OutboxMessage.created_at.desc()))
     return render_template(
         "admin/outbox.html",
-        messages=messages,
+        pager=pager,
+        messages=pager.items,
         status_labels=OUTBOX_STATUS_LABELS,
-        report_to=get_setting("report_email_to", ""),
-        smtp_configured=bool(current_app.config.get("SMTP_HOST")),
+        smtp=smtp,
+        smtp_configured=bool(smtp["host"]),
+        security_labels=settings_service.SECURITY_LABELS,
+        report_to=get_setting(settings_service.REPORT_TO_SETTING, ""),
+        auto_send=get_setting(settings_service.REPORT_AUTO_SEND_SETTING, "0") == "1",
+        periode_labels=PERIODE_LABELS,
+        default_periode=request.args.get("periode", "jour"),
+    )
+
+
+@admin_bp.route("/emails/config", methods=["POST"])
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+def outbox_save_config():
+    host = (request.form.get("smtp_host") or "").strip()
+    port = (request.form.get("smtp_port") or "").strip()
+    security = (request.form.get("smtp_security") or "starttls").strip()
+    user = (request.form.get("smtp_user") or "").strip()
+    password = request.form.get("smtp_password") or ""
+    sender = (request.form.get("smtp_sender") or "").strip()
+    report_to = (request.form.get("report_email_to") or "").strip()
+    auto_send = bool(request.form.get("report_auto_send"))
+
+    try:
+        settings_service.save_smtp_config(
+            host=host,
+            port=port,
+            security=security,
+            user=user,
+            password=password,
+            sender=sender,
+            report_to=report_to,
+            auto_send=auto_send,
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for("admin.outbox"))
+
+    log_action(
+        "email_config_update",
+        entity="settings",
+        after={
+            "host": host,
+            "port": port,
+            "security": security,
+            "user": user,
+            "auto_send": auto_send,
+            "report_to": report_to,
+        },
+        commit=False,
+    )
+    db.session.commit()
+    flash("Configuration e-mail enregistrée.", "success")
+    return redirect(url_for("admin.outbox"))
+
+
+@admin_bp.route("/emails/test-connexion", methods=["POST"])
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+def outbox_test_connection():
+    ok, message = settings_service.verify_connection()
+    log_action(
+        "email_test_connection",
+        entity="settings",
+        after={"ok": ok, "host": settings_service.smtp_config()["host"]},
+        commit=True,
+    )
+    flash(message, "success" if ok else "danger")
+    return redirect(url_for("admin.outbox"))
+
+
+@admin_bp.route("/emails/test", methods=["POST"])
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+def outbox_test_email():
+    to_address = (request.form.get("to_address") or "").strip()
+    if not to_address:
+        to_address = get_setting(settings_service.REPORT_TO_SETTING, "")
+    if to_address:
+        set_setting(settings_service.REPORT_TO_SETTING, to_address)
+    ok, message = settings_service.send_test_email(to_address)
+    log_action(
+        "email_test",
+        entity="outbox",
+        after={"to": to_address, "ok": ok},
+        commit=True,
+    )
+    flash(message, "success" if ok else "danger")
+    return redirect(url_for("admin.outbox"))
+
+
+@admin_bp.route("/emails/apercu")
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+def outbox_preview():
+    periode = request.args.get("periode", "jour")
+    if periode not in PERIODE_LABELS:
+        periode = "jour"
+    return Response(settings_service.build_report_html(periode), mimetype="text/html")
+
+
+@admin_bp.route("/emails/<int:message_id>/apercu")
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+def outbox_message_preview(message_id):
+    msg = db.session.get(OutboxMessage, message_id)
+    if msg is None:
+        flash("Message introuvable.", "danger")
+        return redirect(url_for("admin.outbox"))
+    if msg.body_html:
+        return Response(msg.body_html, mimetype="text/html")
+    return Response(
+        f"<!doctype html><meta charset='utf-8'><pre style='white-space:pre-wrap;font-family:Consolas,monospace;padding:24px'>{msg.body}</pre>",
+        mimetype="text/html",
     )
 
 
@@ -310,14 +526,57 @@ def outbox():
 @permission_required(P.SETTINGS_MANAGE)
 def outbox_queue_report():
     to_address = (request.form.get("to_address") or "").strip()
+    periode = request.form.get("periode", "jour")
+    if periode not in PERIODE_LABELS:
+        periode = "jour"
+    send_now = bool(request.form.get("send_now"))
     if not to_address:
         flash("Renseignez l'adresse destinataire.", "danger")
         return redirect(url_for("admin.outbox"))
-    set_setting("report_email_to", to_address)
-    msg = settings_service.queue_daily_report(to_address, user_id=current_user.id, commit=False)
-    log_action("email_queue", entity="outbox", entity_uuid=msg.uuid, after={"to": to_address}, commit=False)
+
+    set_setting(settings_service.REPORT_TO_SETTING, to_address)
+    try:
+        msg = settings_service.queue_daily_report(
+            to_address,
+            user_id=current_user.id,
+            commit=False,
+            periode=periode,
+        )
+    except Exception as exc:  # noqa: BLE001 - on remonte l'erreur reelle
+        db.session.rollback()
+        flash(f"Le rapport n'a pas pu être généré : {exc}", "danger")
+        return redirect(url_for("admin.outbox"))
+
+    log_action(
+        "email_queue",
+        entity="outbox",
+        entity_uuid=msg.uuid,
+        after={"to": to_address, "periode": periode, "send_now": send_now},
+        commit=False,
+    )
     db.session.commit()
-    flash("Rapport journalier mis en file d'attente.", "success")
+    flash(
+        f"Rapport ({PERIODE_LABELS.get(periode, periode)}) mis en file d'attente.",
+        "success",
+    )
+
+    if send_now:
+        sent, errors = settings_service.send_pending()
+        log_action(
+            "email_send",
+            entity="outbox",
+            after={"envoyes": sent, "erreurs": errors},
+            commit=True,
+        )
+        flash(
+            f"Envoi immédiat : {sent} envoyé(s), {errors} erreur(s).",
+            "success" if errors == 0 else "danger",
+        )
+        if errors:
+            flash(
+                "Vérifiez la configuration SMTP et le message d'erreur dans la file d'envoi.",
+                "warning",
+            )
     return redirect(url_for("admin.outbox"))
 
 
@@ -334,8 +593,8 @@ def outbox_send():
             f"Envoi : {sent} envoye(s), {errors} erreur(s).",
             "success" if errors == 0 else "danger",
         )
-    if not current_app.config.get("SMTP_HOST") and errors:
-        flash("SMTP non configure : renseignez SMTP_HOST pour un envoi reel.", "warning")
+    if not settings_service.smtp_configured() and errors:
+        flash("SMTP non configure : renseignez le serveur dans la configuration ci-dessus.", "warning")
     return redirect(url_for("admin.outbox"))
 
 
