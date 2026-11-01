@@ -245,15 +245,13 @@ def sync():
 @login_required
 @permission_required(P.SYNC_MANAGE)
 def sync_process():
-    bilan = sync_service.process_queue()
-    log_action("sync_process", entity="sync", after=bilan, commit=True)
-    if bilan["traites"] == 0:
-        flash("Aucun evenement a envoyer (file a jour ou sync distante non configuree).", "success")
+    bilan = sync_service.sync_now()
+    log_action("sync_snapshot", entity="sync", after=bilan, commit=True)
+    if not bilan["ok"]:
+        flash(f"Synchronisation impossible : {bilan['error']}", "danger")
     else:
-        flash(
-            f"Sync : {bilan['acquittes']} acquitte(s), {bilan['erreurs']} erreur(s).",
-            "success" if bilan["erreurs"] == 0 else "danger",
-        )
+        total = bilan["result"]["received"]["total"]
+        flash(f"Synchronisation terminée : {total} enregistrement(s) transmis.", "success")
     return redirect(url_for("admin.sync"))
 
 

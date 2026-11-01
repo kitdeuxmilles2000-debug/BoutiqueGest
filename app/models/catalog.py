@@ -1,8 +1,17 @@
 """Catalogue : unites, categories, produits, conversions et historique des prix."""
 from decimal import Decimal
+import unicodedata
+
+from sqlalchemy.orm import validates
 
 from app.extensions import db
-from app.models.base import BaseModel
+from app.models.base import BaseModel, utcnow
+
+
+def normalize_product_name(value):
+    """Canonical key for product names used by duplicate checks."""
+    normalized = unicodedata.normalize("NFKC", value or "")
+    return " ".join(normalized.split()).casefold()
 
 
 class UnitKind:
@@ -11,6 +20,23 @@ class UnitKind:
     PIECE = "piece"
     POIDS = "poids"
     LONGUEUR = "longueur"
+
+
+PRODUCT_PRESET_UNIT_KINDS = {
+    "liquide": frozenset((UnitKind.VOLUME, UnitKind.CAPACITY)),
+    "carton": frozenset((UnitKind.PIECE, UnitKind.CAPACITY)),
+    "couture": frozenset((UnitKind.PIECE,)),
+    "poids": frozenset((UnitKind.POIDS,)),
+    "tissu": frozenset((UnitKind.LONGUEUR,)),
+}
+
+PRODUCT_PRESET_BASE_UNITS = {
+    "liquide": "ML",
+    "carton": "PIECE",
+    "couture": "PIECE",
+    "poids": "G",
+    "tissu": "CM",
+}
 
 
 class ProductKind:
@@ -23,6 +49,29 @@ class ProductKind:
     AUTRE = "autre"
 
 
+class ProductStatus:
+    BROUILLON = "brouillon"
+    EN_ATTENTE = "en_attente"
+    VALIDE = "valide"
+    REJETE = "rejete"
+
+
+PRODUCT_STATUS_LABELS = {
+    ProductStatus.BROUILLON: "Brouillon",
+    ProductStatus.EN_ATTENTE: "En attente de validation",
+    ProductStatus.VALIDE: "Validé",
+    ProductStatus.REJETE: "Rejeté",
+}
+
+
+PRODUCT_STATUS_BADGES = {
+    ProductStatus.BROUILLON: "gray",
+    ProductStatus.EN_ATTENTE: "amber",
+    ProductStatus.VALIDE: "green",
+    ProductStatus.REJETE: "red",
+}
+
+
 class Unit(BaseModel):
     __tablename__ = "units"
 
@@ -30,6 +79,9 @@ class Unit(BaseModel):
     label = db.Column(db.String(60), nullable=False)
     kind = db.Column(db.String(20), nullable=False, default=UnitKind.PIECE)
     is_system = db.Column(db.Boolean, default=False, nullable=False)
+    product_id = db.Column(
+        db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
 
     def __repr__(self):
         return f"<Unit {self.code}>"
@@ -50,28 +102,43 @@ class Category(BaseModel):
 
 class Product(BaseModel):
     __tablename__ = "products"
+    __table_args__ = (
+        db.Index(
+            "uq_products_category_name",
+            db.text("COALESCE(category_id, 0)"),
+            "normalized_name",
+            unique=True,
+        ),
+    )
 
     code = db.Column(db.String(40), unique=True, nullable=False, index=True)
     name = db.Column(db.String(120), nullable=False, index=True)
+    normalized_name = db.Column(db.String(512), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"))
     base_unit_id = db.Column(db.Integer, db.ForeignKey("units.id"), nullable=False)
     kind = db.Column(db.String(20), default=ProductKind.AUTRE, nullable=False)
-    famille = db.Column(db.String(80), index=True)
-    couleur = db.Column(db.String(40), index=True)
-    type_mesure = db.Column(db.String(20), default="autre", nullable=False)
     marge_cible = db.Column(db.Numeric(5, 2))
 
     currency = db.Column(db.String(3), default="CDF", nullable=False)
-    cost_avg = db.Column(db.Numeric(18, 2), default=Decimal("0"), nullable=False)
+    cost_avg = db.Column(db.Numeric(18, 6), default=Decimal("0"), nullable=False)
     stock_qty = db.Column(db.Numeric(18, 3), default=Decimal("0"), nullable=False)
     seuil_alerte = db.Column(db.Numeric(18, 3), default=Decimal("0"), nullable=False)
 
+    active = db.Column(db.Boolean, default=True, nullable=False)
     is_perishable = db.Column(db.Boolean, default=False, nullable=False)
     track_lot = db.Column(db.Boolean, default=False, nullable=False)
     default_expiry_date = db.Column(db.Date)
     shelf_life_days = db.Column(db.Integer)
-    active = db.Column(db.Boolean, default=True, nullable=False)
-    notes = db.Column(db.Text)
+    type_mesure = db.Column(db.String(30), default="autre", nullable=False)
+    famille = db.Column(db.String(80))
+    couleur = db.Column(db.String(80))
+    marque = db.Column(db.String(80))
+    modele = db.Column(db.String(80))
+    validation_status = db.Column(db.String(20), default=ProductStatus.VALIDE, nullable=False, index=True)
+    proposed_by_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    validated_by_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    validated_at = db.Column(db.DateTime)
+    validation_note = db.Column(db.String(255))
 
     category = db.relationship("Category", back_populates="products")
     base_unit = db.relationship("Unit", foreign_keys=[base_unit_id])
@@ -81,6 +148,13 @@ class Product(BaseModel):
         cascade="all, delete-orphan",
         order_by="ProductUnit.factor",
     )
+    proposed_by = db.relationship("User", foreign_keys=[proposed_by_id])
+    validated_by = db.relationship("User", foreign_keys=[validated_by_id])
+
+    @validates("name")
+    def _normalize_name(self, key, value):
+        self.normalized_name = normalize_product_name(value)
+        return value
 
     @property
     def stock_value(self):
@@ -105,7 +179,7 @@ class Product(BaseModel):
         for pu in self.selling_units:
             if pu.unit_id == unit_id:
                 return pu.factor or Decimal("1")
-        return Decimal("1")
+        raise ValueError("Cette unite n'est pas associee au produit selectionne.")
 
     def __repr__(self):
         return f"<Product {self.code} {self.name}>"

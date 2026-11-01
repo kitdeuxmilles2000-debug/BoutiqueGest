@@ -62,38 +62,26 @@ Internet ne sert qu'à **répliquer** et **sauvegarder** — jamais à condition
 
 ---
 
-## 4. Synchronisation distante (idempotente)
+## 4. Synchronisation distante
 
-Chaque opération génère un **événement de synchronisation** :
+La base SQLite locale est la source de vérité. Depuis Administration > Synchronisation, le propriétaire
+envoie manuellement un instantané complet des données métier vers PostgreSQL sur Render. Le transfert
+est unidirectionnel, authentifié par Bearer token et HTTPS; l'instance Render est configurée en lecture
+seule pour les opérations métier.
 
-```
-SyncEvent {
-  id (UUIDv4 unique),
-  type, entity_id, payload,
-  created_at, author_id, device_id,
-  status: à_envoyer | envoyé | acquitté | erreur,
-  attempts, last_error
-}
-```
+L'import est transactionnel et fusionne les lignes par UUID. Les lignes cloud absentes de l'instantané
+ne sont pas supprimées. Les conflits d'unicité annulent l'import et sont signalés au lieu d'écraser
+silencieusement des données. Les UUID source sont conservés, mais les clés entières sont remappées pour
+préserver les relations avec les données qui existent déjà dans PostgreSQL.
 
-Règles :
-1. Événements mis en **file d'attente locale**, renvoyés automatiquement en cas d'échec (backoff).
-2. Le serveur **détecte les doublons** par `UUID` et applique les événements de façon **idempotente** :
-   rejouer le même événement **ne crée rien de nouveau**.
-3. Le tableau de bord affiche **dernière sync** + **nombre d'opérations en attente / en erreur**.
-4. **Conflits** : enregistrés et résolus selon des règles explicites ; **aucune donnée financière
-   écrasée silencieusement** (le conflit remonte à un validateur).
+Les données d'authentification locales (mots de passe, PIN, e-mails, rôles et sessions) ne sont pas
+transférées. Des comptes miroir désactivés portent uniquement les noms nécessaires pour attribuer les
+opérations importées; les comptes de connexion Render restent indépendants.
 
-### 4.1 Règles d'autorité (proposition)
-- Écritures **métier sensibles** (vente, caisse, réception, dépense) : **autorisées uniquement sur le LAN**
-  au lancement. Le distant est **lecture** pour ces entités.
-- **Paramètres sensibles** (prix, taux, rôles) : modifiables sur le serveur local, répliqués ensuite.
-
-### 4.2 Limite reconnue
-En cas de coupure, si un smartphone autonome et le serveur modifient le **même stock**, leurs états
-peuvent **diverger temporairement**. La cohérence temps réel n'est **pas garantie hors réseau** — c'est
-pourquoi la saisie de vente est **réservée au LAN**. Cette limite sera **documentée et expliquée** aux
-utilisateurs.
+Les écritures métier continuent localement même sans Internet. La synchronisation est déclenchée par
+l'utilisateur et doit être relancée après des changements à publier; elle n'est pas automatique ni
+temps réel. Le détail des paramètres et des limites est dans
+[`05-synchronisation-render.md`](05-synchronisation-render.md).
 
 ---
 

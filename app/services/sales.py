@@ -4,7 +4,7 @@ Une vente validee est **immuable** : on ne la modifie ni ne la supprime. Toute
 correction passe par une contre-ecriture (annulation / remboursement) tracee.
 """
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from app.extensions import db
 from app.models.catalog import ProductUnit
@@ -18,25 +18,12 @@ from app.models.sales import (
     SaleStatus,
 )
 from app.models.stock import MovementKind
-from app.models.sync import enqueue
 from app.services import cash as cash_service
 from app.services.stock import conversion_factor, dec, record_movement
 
 
 class StockInsuffisant(ValueError):
     """Le stock disponible (valide) ne couvre pas la quantite demandee."""
-
-
-def _queue_sync(entity, action, entity_uuid, payload=None, author_id=None):
-    import json
-
-    enqueue(
-        entity,
-        action,
-        entity_uuid=entity_uuid,
-        payload=json.dumps(payload) if payload else None,
-        author_id=author_id,
-    )
 
 
 def next_sale_number(day=None):
@@ -51,14 +38,15 @@ def unit_price(product, unit_id, currency=None):
     pu = ProductUnit.query.filter_by(product_id=product.id, unit_id=unit_id).first()
     if pu is not None and (currency is None or pu.currency == currency):
         return dec(pu.prix_vente)
-    if pu is not None:
-        return dec(pu.prix_vente)
     return dec(0)
 
 
 def sellable_units(product, currency):
     """Unites de vente du produit dans la devise demandee."""
-    return [pu for pu in product.selling_units if pu.currency == currency]
+    return [
+        pu for pu in product.selling_units
+        if pu.active and pu.currency == currency
+    ]
 
 
 def create_sale(
@@ -77,45 +65,102 @@ def create_sale(
     `items` : liste de dicts {product, unit_id, quantity, prix_unitaire?}.
     `payments` : liste de dicts {amount, method, reference?}.
     """
+    if cash_session is None or not cash_session.is_open:
+        raise ValueError("Ouvrez une caisse avant d'enregistrer une vente.")
+    if not cash_session.register.active:
+        raise ValueError("La caisse sélectionnée est inactive.")
+    if currency != cash_session.currency:
+        raise ValueError("La devise de la vente doit correspondre à celle de la caisse.")
+
+    if not items:
+        raise ValueError("Le panier est vide.")
+
+    def decimal_value(value, label):
+        try:
+            result = Decimal(str(value).strip().replace(",", "."))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValueError(f"{label} doit etre un nombre valide.") from None
+        if not result.is_finite():
+            raise ValueError(f"{label} doit etre un nombre valide.")
+        return result
+
+    requested_stock = {}
+    subtotal = Decimal("0")
+    for item in items:
+        product = item.get("product")
+        unit_id = item.get("unit_id")
+        quantity = decimal_value(item.get("quantity"), "La quantité")
+        if product is None or not product.active:
+            raise ValueError("Un produit du panier est introuvable ou inactif.")
+        if quantity <= 0:
+            raise ValueError(f"La quantité demandée pour {product.name} doit être positive.")
+        if unit_id not in {pu.unit_id for pu in sellable_units(product, currency)}:
+            raise ValueError(
+                f"Le format de vente selectionne pour {product.name} n'est plus disponible."
+            )
+        factor = conversion_factor(product, unit_id)
+        requested_stock[product.id] = requested_stock.get(product.id, Decimal("0")) + quantity * factor
+        price = unit_price(product, unit_id, currency)
+        if price <= 0:
+            raise ValueError(f"Aucun prix de vente valide n'est défini pour {product.name}.")
+        subtotal += (quantity * price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    subtotal = subtotal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    discount = decimal_value(remise, "La remise").quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    if discount < 0:
+        raise ValueError("La remise ne peut pas être négative.")
+    if discount > subtotal:
+        raise ValueError("La remise ne peut pas dépasser le sous-total.")
+    total = subtotal - discount
+    valid_payment_methods = {PaymentMethod.ESPECE, PaymentMethod.BANQUE}
+    payment_total = Decimal("0")
+    normalized_payments = []
+    for pay in payments or []:
+        if not isinstance(pay, dict):
+            raise ValueError("Un moyen de paiement est invalide.")
+        amount = decimal_value(pay.get("amount"), "Le montant payé").quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        method = pay.get("method") or PaymentMethod.ESPECE
+        if amount <= 0:
+            raise ValueError("Chaque paiement doit avoir un montant positif.")
+        if method not in valid_payment_methods:
+            raise ValueError("Le moyen de paiement sélectionné n'est pas valide.")
+        payment_total += amount
+        normalized_payments.append((pay, amount, method))
+    if payment_total > total:
+        raise ValueError("Le montant payé ne peut pas dépasser le total de la vente.")
+
+    for item in items:
+        product = item["product"]
+        disponible = dec(product.stock_qty)
+        demande = requested_stock[product.id]
+        if disponible < demande:
+            raise StockInsuffisant(
+                f"Stock insuffisant pour {product.name} : "
+                f"{disponible} {product.base_unit.label if product.base_unit else ''} "
+                f"disponibles, {demande} demandés. "
+                f"Validez une entrée de stock avant de vendre ce produit."
+            )
+
     sale = Sale(
         numero=next_sale_number(),
         vendeur_id=vendeur_id,
         cash_session_id=cash_session.id if cash_session else None,
         currency=currency,
         status=SaleStatus.VALIDEE,
-        remise=dec(remise),
+        remise=discount,
         notes=(notes or "").strip() or None,
     )
     db.session.add(sale)
     db.session.flush()
 
-    subtotal = Decimal("0")
-    # Verification du stock disponible AVANT tout mouvement : un produit sans
-    # stock valide ne peut pas etre vendu (le stock ne bouge qu'apres
-    # validation d'une entree par le proprietaire).
     for item in items:
         product = item["product"]
         unit_id = item.get("unit_id")
-        quantity = dec(item.get("quantity"))
-        if quantity <= 0:
-            continue
-        factor = conversion_factor(product, unit_id)
-        qty_base = quantity * factor
-        disponible = dec(product.stock_qty)
-        if disponible < qty_base:
-            raise StockInsuffisant(
-                f"Stock insuffisant pour {product.name} : "
-                f"{disponible} {product.base_unit.label if product.base_unit else ''} "
-                f"disponibles, {qty_base} demandés. "
-                f"Validez une entrée de stock avant de vendre ce produit."
-            )
-
-    for item in items:
-        product = item["product"]
-        unit_id = item.get("unit_id")
-        quantity = dec(item.get("quantity"))
-        if quantity <= 0:
-            continue
+        quantity = Decimal(str(item.get("quantity")).strip().replace(",", "."))
 
         factor = conversion_factor(product, unit_id)
         qty_base = quantity * factor
@@ -136,8 +181,6 @@ def create_sale(
                 currency=currency,
             )
         )
-        subtotal += quantity * prix
-
         record_movement(
             product,
             MovementKind.VENTE,
@@ -152,14 +195,9 @@ def create_sale(
             commit=False,
         )
 
-    sale.montant_total = subtotal - dec(remise)
+    sale.montant_total = total
 
-    paid = Decimal("0")
-    for pay in payments or []:
-        amount = dec(pay.get("amount"))
-        if amount <= 0:
-            continue
-        method = pay.get("method") or PaymentMethod.ESPECE
+    for pay, amount, method in normalized_payments:
         db.session.add(
             Payment(
                 sale_id=sale.id,
@@ -170,7 +208,6 @@ def create_sale(
                 user_id=vendeur_id,
             )
         )
-        paid += amount
         if method == PaymentMethod.ESPECE and cash_session is not None:
             cash_service.record_cash(
                 cash_session,
@@ -183,19 +220,7 @@ def create_sale(
                 commit=False,
             )
 
-    sale.montant_paye = paid
-    _queue_sync(
-        "sale",
-        "create",
-        sale.uuid,
-        payload={
-            "numero": sale.numero,
-            "currency": currency,
-            "montant_total": str(sale.montant_total),
-            "montant_paye": str(paid),
-        },
-        author_id=vendeur_id,
-    )
+    sale.montant_paye = payment_total
     if commit:
         db.session.commit()
     return sale
@@ -248,7 +273,6 @@ def cancel_sale(sale, user_id, reason, restock=True, commit=True):
     _reverse_cash(sale, user_id, reason)
     sale.status = SaleStatus.ANNULEE
     sale.notes = (f"{sale.notes or ''}\nAnnulee : {reason}").strip()
-    _queue_sync("sale", "cancel", sale.uuid, payload={"reason": reason}, author_id=user_id)
     if commit:
         db.session.commit()
     return sale
@@ -286,13 +310,6 @@ def refund_sale(sale, user_id, amount, method, motif, authorized_by_id=None, res
     if total_refunded >= dec(sale.montant_total):
         sale.status = SaleStatus.REMBOURSEE
 
-    _queue_sync(
-        "sale",
-        "refund",
-        sale.uuid,
-        payload={"amount": str(amount), "motif": refund.motif},
-        author_id=user_id,
-    )
     if commit:
         db.session.commit()
     return refund

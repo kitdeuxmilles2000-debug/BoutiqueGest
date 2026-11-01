@@ -73,7 +73,8 @@ def seed_units():
         if code not in existing:
             db.session.add(Unit(code=code, label=label, kind=kind, is_system=True))
             created += 1
-    db.session.commit()
+    if created:
+        db.session.commit()
     return created
 
 
@@ -84,8 +85,16 @@ def seed_categories():
         if name not in existing:
             db.session.add(Category(name=name))
             created += 1
-    db.session.commit()
+    if created:
+        db.session.commit()
     return created
+
+
+def ensure_catalog_defaults():
+    """Keep product forms usable even when the database was never seeded."""
+    units_created = seed_units()
+    categories_created = seed_categories()
+    return units_created + categories_created
 
 
 def seed_permissions():

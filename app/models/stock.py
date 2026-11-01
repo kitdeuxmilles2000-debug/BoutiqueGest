@@ -77,6 +77,13 @@ class StockEntryRequest(BaseModel):
     """
 
     __tablename__ = "stock_entry_requests"
+    __table_args__ = (
+        db.Index(
+            "ix_stock_entry_requests_duplicate_signature",
+            "duplicate_signature",
+            unique=True,
+        ),
+    )
 
     reference = db.Column(db.String(40), unique=True, nullable=False, index=True)
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False, index=True)
@@ -92,6 +99,8 @@ class StockEntryRequest(BaseModel):
 
     lot_number = db.Column(db.String(60))
     expiry_date = db.Column(db.Date)
+    duplicate_signature = db.Column(db.String(64))
+    duplicate_approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id"))
 
     supplier_id = db.Column(db.Integer, db.ForeignKey("suppliers.id"))
     purchase_id = db.Column(db.Integer, db.ForeignKey("purchases.id"))
@@ -110,6 +119,7 @@ class StockEntryRequest(BaseModel):
     created_by = db.relationship("User", foreign_keys=[created_by_id])
     validated_by = db.relationship("User", foreign_keys=[validated_by_id])
     rejected_by = db.relationship("User", foreign_keys=[rejected_by_id])
+    duplicate_approved_by = db.relationship("User", foreign_keys=[duplicate_approved_by_id])
 
     def __repr__(self):
         return f"<StockEntryRequest {self.reference} {self.status}>"
@@ -123,7 +133,7 @@ class StockMovement(BaseModel):
     quantity = db.Column(db.Numeric(18, 3), nullable=False)  # signe, en unite de base
     unit_id = db.Column(db.Integer, db.ForeignKey("units.id"))
     unit_factor = db.Column(db.Numeric(18, 4), default=Decimal("1"))
-    cost_unit = db.Column(db.Numeric(18, 2))
+    cost_unit = db.Column(db.Numeric(18, 6))
     currency = db.Column(db.String(3), default="CDF", nullable=False)
 
     source_type = db.Column(db.String(40))

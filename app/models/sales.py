@@ -3,7 +3,7 @@
 Une vente est **mono-devise** : tous ses articles et paiements partagent la devise
 du registre de caisse utilise. Les devises ne sont donc jamais melangees.
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from app.extensions import db
 from app.models.base import BaseModel, utcnow
@@ -240,7 +240,7 @@ class SaleLine(BaseModel):
     qty_base = db.Column(db.Numeric(18, 3), nullable=False)   # quantite convertie en unite de base
     prix_unitaire = db.Column(db.Numeric(18, 2), default=Decimal("0"), nullable=False)
     remise_ligne = db.Column(db.Numeric(18, 2), default=Decimal("0"), nullable=False)
-    cout_unitaire_cmp = db.Column(db.Numeric(18, 2), default=Decimal("0"), nullable=False)
+    cout_unitaire_cmp = db.Column(db.Numeric(18, 6), default=Decimal("0"), nullable=False)
     currency = db.Column(db.String(3), default="CDF", nullable=False)
 
     sale = db.relationship("Sale", back_populates="lines")
@@ -249,8 +249,9 @@ class SaleLine(BaseModel):
 
     @property
     def line_total(self):
-        return (self.quantity or Decimal("0")) * (self.prix_unitaire or Decimal("0")) - (
-            self.remise_ligne or Decimal("0")
+        total = (self.quantity or Decimal("0")) * (self.prix_unitaire or Decimal("0"))
+        return (total - (self.remise_ligne or Decimal("0"))).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
         )
 
     def __repr__(self):

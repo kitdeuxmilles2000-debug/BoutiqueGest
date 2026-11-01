@@ -67,7 +67,7 @@ const PRODUCT_DATA = [
   { id: {{ p.id }}, name: {{ p.name | tojson }}, base_unit: {% if p.base_unit %}{ id: {{ p.base_unit.id }}, label: {{ p.base_unit.label | tojson }} }{% else %}null{% endif %},
     units: [
       {% if p.base_unit %}{ id: {{ p.base_unit.id }}, label: {{ p.base_unit.label | tojson }}, factor: 1 }{% endif %}
-      {% for pu in p.selling_units %},{ id: {{ pu.unit_id }}, label: {{ pu.unit.label | tojson }}, factor: {{ pu.factor }} }{% endfor %}
+      {% for pu in p.selling_units %}{% if pu.active %},{ id: {{ pu.unit_id }}, label: {{ pu.unit.label | tojson }}, factor: {{ pu.factor }} }{% endif %}{% endfor %}
     ] }{% if not loop.last %},{% endif %}
   {% endfor %}
 ];

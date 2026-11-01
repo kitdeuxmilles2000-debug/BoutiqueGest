@@ -5,7 +5,7 @@ Tous les montants restent **par devise** (jamais mélangés) ; la consolidation
 multi-devises n'est faite qu'à titre indicatif.
 """
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 from app.extensions import db
 from app.models.base import utcnow
@@ -19,6 +19,7 @@ from app.models.sales import (
     Sale,
     SaleStatus,
 )
+from app.models.purchases import Purchase, PurchaseStatus
 from app.services.stock import dec
 
 PERIODE_LABELS = {
@@ -84,6 +85,35 @@ def ventes_summary(debut, fin):
         bucket["cout"] += dec(sale.total_cost)
         bucket["marge"] += dec(sale.marge)
         bucket["count"] += 1
+    for bucket in totals.values():
+        bucket["taux_marge"] = (
+            (bucket["marge"] * Decimal("100") / bucket["ca"]).quantize(
+                Decimal("0.1"), rounding=ROUND_HALF_UP
+            )
+            if bucket["ca"]
+            else None
+        )
+    return totals
+
+
+def achats_summary(debut, fin):
+    """Total des achats effectivement réceptionnés sur la période, par devise."""
+    purchases = (
+        Purchase.query.filter(
+            Purchase.received_at >= debut,
+            Purchase.received_at < fin,
+            Purchase.status == PurchaseStatus.RECEPTIONNEE,
+        )
+        .all()
+    )
+    totals = {}
+    for purchase in purchases:
+        bucket = totals.setdefault(
+            purchase.currency,
+            {"total": Decimal("0"), "count": 0},
+        )
+        bucket["total"] += dec(purchase.montant_total)
+        bucket["count"] += 1
     return totals
 
 
@@ -124,8 +154,26 @@ def top_produits(debut, fin, limit=10):
     sales = _sales_in(debut, fin)
     produits = {}
     for sale in sales:
-        for line in sale.lines:
-            key = line.product_id
+        lines = list(sale.lines)
+        subtotal = sum((dec(line.line_total) for line in lines), Decimal("0"))
+        discount = min(
+            subtotal,
+            max(Decimal("0"), subtotal - dec(sale.montant_total)),
+        )
+        allocated_discount = Decimal("0")
+        for index, line in enumerate(lines):
+            line_revenue = dec(line.line_total)
+            if index == len(lines) - 1:
+                line_discount = discount - allocated_discount
+            elif subtotal > 0:
+                line_discount = (discount * line_revenue / subtotal).quantize(
+                    Decimal("0.01"), rounding=ROUND_DOWN
+                )
+                allocated_discount += line_discount
+            else:
+                line_discount = Decimal("0")
+            net_revenue = line_revenue - line_discount
+            key = (line.product_id, line.currency)
             bucket = produits.setdefault(
                 key,
                 {
@@ -137,9 +185,18 @@ def top_produits(debut, fin, limit=10):
                 },
             )
             bucket["qte"] += dec(line.qty_base)
-            bucket["ca"] += dec(line.line_total)
-            bucket["marge"] += dec(line.line_total) - dec(line.cout_unitaire_cmp) * dec(line.qty_base)
-    return sorted(produits.values(), key=lambda x: x["ca"], reverse=True)[:limit]
+            bucket["ca"] += net_revenue
+            bucket["marge"] += net_revenue - dec(line.cout_unitaire_cmp) * dec(line.qty_base)
+    rows = list(produits.values())
+    for row in rows:
+        row["taux_marge"] = (
+            (row["marge"] * Decimal("100") / row["ca"]).quantize(
+                Decimal("0.1"), rounding=ROUND_HALF_UP
+            )
+            if row["ca"]
+            else None
+        )
+    return sorted(rows, key=lambda x: x["ca"], reverse=True)[:limit]
 
 
 def serie_journaliere(debut, fin, currency="CDF"):

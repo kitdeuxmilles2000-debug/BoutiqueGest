@@ -309,13 +309,14 @@ def build_report_context(periode="jour", report_date=None):
 
     debut, fin = _report_bounds(periode, report_date)
     ventes = reports_service.ventes_summary(debut, fin)
+    achats = reports_service.achats_summary(debut, fin)
     charges, expenses = reports_service.charges_summary(debut, fin)
     par_nature, par_devise = reports_service.tresorerie_summary(debut, fin)
     resultat = reports_service.result_summary(debut, fin)
     top = reports_service.top_produits(debut, fin, limit=8)
     creances = reports_service.creances_summary()
 
-    devises = sorted(set(ventes) | set(charges) | set(resultat) | set(par_devise))
+    devises = sorted(set(ventes) | set(achats) | set(charges) | set(resultat) | set(par_devise))
     highlight_currency = "CDF" if "CDF" in devises else (devises[0] if devises else "CDF")
     highlight = resultat.get(
         highlight_currency, {"marge": Decimal("0"), "charges": Decimal("0"), "resultat": Decimal("0")}
@@ -337,6 +338,7 @@ def build_report_context(periode="jour", report_date=None):
         "generated_at": utcnow(),
         "today": date.today(),
         "ventes": ventes,
+        "achats": achats,
         "charges": charges,
         "expenses": recent_expenses,
         "tresorerie_nature": par_nature,
@@ -391,6 +393,16 @@ def build_report_text(periode="jour", report_date=None):
             )
     else:
         lines.append("  aucune vente")
+
+    lines += ["", "Achats reçus sur la période (par devise) :"]
+    if ctx["achats"]:
+        for devise, data in sorted(ctx["achats"].items()):
+            lines.append(
+                f"  {devise}: {data['count']} achat(s), total="
+                f"{_fmt_amount(data['total'])}"
+            )
+    else:
+        lines.append("  aucun achat réceptionné")
 
     lines += ["", "Charges validees (par devise) :"]
     if ctx["charges"]:

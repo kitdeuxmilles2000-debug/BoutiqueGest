@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import show_pager, delete_form %}
+{% from "_macros.html" import show_pager, delete_form, table_action %}
 {% block title %}Entrées de stock en attente{% endblock %}
 {% block heading %}Entrées de stock en attente{% endblock %}
 
@@ -29,8 +29,9 @@
           <th>Date</th>
           <th>Produit</th>
           <th>Unité</th>
-          <th>Quantité</th>
-          <th>Coût unit.</th>
+          <th>Quantité reçue</th>
+          <th>Prix d'achat unitaire</th>
+          <th>Valeur d'achat</th>
           <th>Motif</th>
           <th>N° lot</th>
           <th>Expiration</th>
@@ -48,12 +49,13 @@
             <strong>{{ e.product.name if e.product else '—' }}</strong>
             <span class="muted">({{ e.product.code if e.product else '' }})</span>
             {% if e.product %}
-            <a class="btn ghost sm" href="{{ url_for('products.detail', product_id=e.product.id) }}">Fiche</a>
+            {{ table_action(url_for('products.detail', product_id=e.product.id), 'view', 'Voir la fiche produit') }}
             {% endif %}
           </td>
           <td>{{ e.unit.label if e.unit else (e.product.base_unit.label if e.product and e.product.base_unit else '—') }}</td>
-          <td class="num">{{ e.qty_base | qty }} {{ e.product.base_unit.code if e.product and e.product.base_unit else '' }}</td>
-          <td class="num">{{ e.cost_unit | num }} {{ e.currency }}</td>
+          <td class="num">{{ e.quantity | qty }} {{ e.unit.code if e.unit else (e.product.base_unit.code if e.product and e.product.base_unit else '') }}</td>
+          <td class="num">{{ e.cost_unit | num }} {{ e.currency }} / {{ e.unit.code if e.unit else (e.product.base_unit.code if e.product and e.product.base_unit else 'unité') }}</td>
+          <td class="num">{{ (e.quantity * e.cost_unit) | num }} {{ e.currency }}</td>
           <td>{{ e.reason or '—' }}</td>
           <td>{{ e.lot_number or '—' }}</td>
           <td>
@@ -66,10 +68,12 @@
           <td>
             {% if e.status == 'en_attente' %}
               {% if is_owner() %}
-              <div class="row" style="gap:6px; flex-wrap: wrap">
+              <div class="row" style="gap:4px; flex-wrap: nowrap">
                 <button class="btn sm" type="button" onclick="openValidate({{ e.id }})">Valider</button>
-                <button class="btn ghost sm" type="button" onclick="openEdit({{ e.id }})">Modifier</button>
-                {{ delete_form(url_for('stock.entry_delete', req_id=e.id), confirm_text='Supprimer définitivement cette demande en attente ?') }}
+                <button class="btn ghost sm btn-icon" type="button" title="Modifier la demande" aria-label="Modifier la demande" onclick="openEdit({{ e.id }})">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
+                </button>
+                {{ delete_form(url_for('stock.entry_delete', req_id=e.id), confirm_text='Supprimer définitivement cette demande en attente ?', icon_only=true) }}
                 <form method="post" action="{{ url_for('stock.entry_reject', req_id=e.id) }}" onsubmit="return confirm('Rejeter cette demande ?')">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="reason" value="Rejeté par le propriétaire">
@@ -78,7 +82,7 @@
               </div>
               {% else %}
               <span class="muted">En attente du propriétaire</span>
-              {% if current_user.has_permission(P.STOCK_MANAGE) %}{{ delete_form(url_for('stock.entry_delete', req_id=e.id), confirm_text='Supprimer définitivement cette demande en attente ?') }}{% endif %}
+              {% if current_user.has_permission(P.STOCK_MANAGE) %}{{ delete_form(url_for('stock.entry_delete', req_id=e.id), confirm_text='Supprimer définitivement cette demande en attente ?', icon_only=true) }}{% endif %}
               {% endif %}
             {% elif e.status == 'validee' %}
             <span class="muted">Validé par {{ e.validated_by.username if e.validated_by else '—' }}<br>{{ e.validated_at.strftime('%d/%m/%Y %H:%M') if e.validated_at else '' }}</span>
@@ -88,7 +92,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="12" class="muted">Aucune demande en attente.</td></tr>
+        <tr><td colspan="13" class="muted">Aucune demande en attente.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -151,7 +155,6 @@
     </div>
     <form method="post" id="edit_form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="owner_password" value="">
       <div class="modal-body">
         <div class="field full">
           <label>Produit</label>
@@ -180,6 +183,10 @@
         <div class="field full">
           <label for="m_notes_edit">Notes</label>
           <input type="text" id="m_notes_edit" name="notes" placeholder="Motif de la modification">
+        </div>
+        <div class="field full">
+          <label for="m_owner_password">Mot de passe propriétaire / administrateur</label>
+          <input type="password" id="m_owner_password" name="owner_password" required autocomplete="current-password">
         </div>
       </div>
       <div class="modal-footer">

@@ -1,5 +1,5 @@
 """Logique de caisse : ouverture, mouvements, cloture et validation."""
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from app.extensions import db
 from app.models.base import utcnow
@@ -12,6 +12,17 @@ from app.models.sales import (
     CashSessionStatus,
 )
 from app.services.stock import dec
+
+
+def money_value(value, label="Le montant"):
+    """Parse a finite cash amount and round it to currency precision."""
+    try:
+        amount = Decimal(str(value).strip().replace(",", "."))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError(f"{label} doit etre un nombre valide.") from None
+    if not amount.is_finite():
+        raise ValueError(f"{label} doit etre un nombre valide.")
+    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def sign_for(kind):
@@ -28,6 +39,11 @@ def get_register(register_id):
 
 
 def open_session(register, vendeur_id, solde_initial=0, commit=True):
+    if register is None or not register.active:
+        raise ValueError("Selectionnez une caisse active.")
+    opening_balance = money_value(solde_initial, "Le fond initial")
+    if opening_balance < 0:
+        raise ValueError("Le fond initial ne peut pas etre negatif.")
     existing = (
         CashSession.query.filter_by(register_id=register.id, status=CashSessionStatus.OUVERTE)
         .first()
@@ -39,7 +55,7 @@ def open_session(register, vendeur_id, solde_initial=0, commit=True):
         register_id=register.id,
         vendeur_id=vendeur_id,
         currency=register.currency,
-        solde_initial=dec(solde_initial),
+        solde_initial=opening_balance,
         status=CashSessionStatus.OUVERTE,
     )
     db.session.add(session)
@@ -70,6 +86,11 @@ def record_cash(
     commit=True,
 ):
     """Enregistre un mouvement de caisse. `amount` est signe (+ entree / - sortie)."""
+    amount = money_value(amount)
+    if amount == 0:
+        raise ValueError("Le montant du mouvement doit etre different de zero.")
+    if currency and currency != session.currency:
+        raise ValueError("La devise du mouvement doit correspondre a celle de la caisse.")
     movement = CashMovement(
         session_id=session.id,
         kind=kind,
@@ -87,8 +108,12 @@ def record_cash(
 
 
 def close_session(session, solde_compte, motif=None, commit=True):
+    if not session.is_open:
+        raise ValueError("Cette caisse n'est pas ouverte.")
     session.solde_theorique = session.compute_theorique()
-    session.solde_compte = dec(solde_compte)
+    session.solde_compte = money_value(solde_compte, "Le montant compte")
+    if session.solde_compte < 0:
+        raise ValueError("Le montant compte ne peut pas etre negatif.")
     session.ecart = session.solde_compte - session.solde_theorique
     session.motif_ecart = (motif or "").strip() or None
     session.status = CashSessionStatus.SOUMISE

@@ -58,7 +58,7 @@ def default_sale_unit(product):
     """Unite de vente proposee : celle marquee par defaut, sinon la premiere hors base."""
     secondary = [
         pu for pu in product.selling_units
-        if pu.unit_id != product.base_unit_id and dec(pu.factor) > 0
+        if pu.active and pu.unit_id != product.base_unit_id and dec(pu.factor) > 0
     ]
     for pu in secondary:
         if pu.is_sale_default:

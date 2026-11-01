@@ -3,13 +3,23 @@ services:
     name: boutiquegest
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt && flask db upgrade
-    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    buildCommand: pip install -r requirements.txt && flask --app run db upgrade && flask --app run seed
+    startCommand: waitress-serve --host=0.0.0.0 --port=$PORT wsgi:app
     envVars:
       - key: FLASK_CONFIG
         value: prod
       - key: SECRET_KEY
         generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: SYNC_API_TOKEN
+        generateValue: true
+      - key: CLOUD_READ_ONLY
+        value: "1"
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
       - key: DATABASE_URL
         fromDatabase:
           name: boutiquegest-db

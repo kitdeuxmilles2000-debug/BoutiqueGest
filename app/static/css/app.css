@@ -92,6 +92,9 @@ table.table td.center, table.table th.center { text-align: center; }
 .btn.danger { background: var(--danger); }
 .btn.block { width: 100%; justify-content: center; }
 .btn.sm { padding: 6px 10px; font-size: .8rem; }
+.btn.btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; }
+.btn.btn-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.btn.btn-icon:focus-visible { outline: 3px solid rgba(29, 78, 216, .35); outline-offset: 2px; }
 
 .field { margin-bottom: 14px; }
 .field label { display: block; font-weight: 600; font-size: .84rem; margin-bottom: 6px; }
@@ -197,4 +200,3 @@ table.table tfoot td { background: #eef2f7; border-top: 2px solid #94a3b8; font-
 .modal .modal-footer { padding: 8px 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
 .modal .form-narrow { max-width: 100%; }
 .modal input, .modal select, .modal textarea { padding: 7px 9px; border-radius: 8px; font-size: .86rem; }
-

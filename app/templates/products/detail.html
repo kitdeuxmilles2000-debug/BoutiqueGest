@@ -42,7 +42,7 @@
       <tbody>
         {% for pu in product.selling_units %}
         <tr>
-          <td>{{ pu.unit.label }} ({{ pu.unit.code }}){% if pu.unit_id == product.base_unit_id %} <span class="badge blue">base</span>{% endif %}</td>
+          <td>{{ pu.unit.label }} ({{ pu.unit.code }}){% if pu.unit_id == product.base_unit_id %} <span class="badge blue">base</span>{% endif %}{% if not pu.active %} <span class="badge gray">Désactivée</span>{% endif %}</td>
           <td>{{ pu.factor | qty }}</td>
           <td>{{ pu.prix_vente | num }} {{ pu.currency }}</td>
           <td>{% if pu.is_sale_default %}<span class="badge blue">Oui</span>{% else %}—{% endif %}</td>

@@ -150,6 +150,9 @@ le système **ne modifie jamais** les ventes pour l'annuler.
 | **EmailLog** | `rapport`, `destinataires`, `statut`, `tentatives`, `erreur`, `envoye_at` |
 | **Notification** | `niveau`, `categorie`, `message`, `lue`, `acquittee`, `created_at` |
 
+> `SyncEvent` est conservé pour compatibilité avec les anciennes bases locales. Le transfert actif
+> vers Render envoie des instantanés métier authentifiés; il n'utilise plus cette file d'événements.
+
 ---
 
 ## 12. Relations principales (résumé)

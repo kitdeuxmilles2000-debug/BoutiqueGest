@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Proposer un article{% endblock %}
+{% block heading %}Proposer un article{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Proposer un nouvel article</h2>
+      <p class="sub">Formulaire simplifié. L'article ne sera ajouté au stock qu'après validation par un administrateur.</p>
+    </div>
+  </div>
+  <form method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field">
+      <label>Nom du produit *</label>
+      <input name="name" required>
+    </div>
+    <div class="field">
+      <label>Référence interne (code)</label>
+      <input name="code" placeholder="Généré automatiquement si vide">
+    </div>
+    <div class="field">
+      <label>Catégorie</label>
+      <select name="category_id">
+        <option value="">-- Aucune --</option>
+        {% for c in categories %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Unité de référence du stock *</label>
+      <select name="base_unit_id" required>
+        <option value="">-- Sélectionner --</option>
+        {% for u in units %}
+        <option value="{{ u.id }}">{{ u.label }} ({{ u.code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Type</label>
+      <select name="kind">
+        {% for k,v in kinds.__dict__.items() %}
+          {% if k.isupper() and not k.startswith('_') %}
+          <option value="{{ v }}">{{ v }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Devise</label>
+      <select name="currency">
+        {% for cur in currencies %}
+        <option value="{{ cur }}">{{ cur }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Seuil d'alerte</label>
+      <input name="seuil_alerte" type="number" step="0.001" value="0">
+    </div>
+    <div class="actions full">
+      <button class="btn primary">Soumettre la proposition</button>
+      <a class="btn ghost" href="{{ url_for('products.index') }}">Annuler</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

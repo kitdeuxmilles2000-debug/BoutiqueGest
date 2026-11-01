@@ -8,7 +8,7 @@ Une sauvegarde est creee avant tout effacement par l'appelant (route admin).
 """
 from app.extensions import db
 from app.models.audit import AuditLog
-from app.models.catalog import PriceHistory, Product, ProductUnit
+from app.models.catalog import PriceHistory, Product, ProductUnit, Unit
 from app.models.finance import Credit, Expense, Installment, Settlement
 from app.models.notifications import Notification
 from app.models.partners import Customer, Supplier
@@ -129,6 +129,7 @@ def reset_operations(*, include_catalog=False, include_partners=False):
     if include_catalog:
         PriceHistory.query.delete(synchronize_session=False)
         ProductUnit.query.delete(synchronize_session=False)
+        Unit.query.filter(Unit.product_id.is_not(None)).delete(synchronize_session=False)
         Product.query.delete(synchronize_session=False)
     else:
         # Les produits restent, mais leur stock repart de zero.

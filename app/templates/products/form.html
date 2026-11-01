@@ -4,178 +4,241 @@
 
 {% block content %}
 <style>
-  .prod-layout { display: grid; grid-template-columns: 1fr 420px; gap: 18px; align-items: start; }
+  .prod-layout { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: start; }
   @media (max-width: 1100px) { .prod-layout { grid-template-columns: 1fr; } }
-  .prod-form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 16px; }
+  .prod-form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 12px; }
   .prod-form .field { margin-bottom: 0; }
   .prod-form .field.full { grid-column: 1 / -1; }
-  .prod-form .section-title { grid-column: 1 / -1; margin: 10px 0 4px; font-size: .95rem; font-weight: 800; letter-spacing: -.01em; }
-  .prod-form .section-sub { grid-column: 1 / -1; margin: -2px 0 6px; color: var(--muted); font-size: .83rem; }
-  .prod-form input, .prod-form select, .prod-form textarea { padding: 9px 11px; border-radius: 10px; font-size: .9rem; }
+  .prod-form .section-title { grid-column: 1 / -1; margin: 10px 0 2px; font-size: .95rem; font-weight: 800; }
+  .prod-form .section-sub { grid-column: 1 / -1; margin: -2px 0 4px; color: var(--muted); font-size: .82rem; }
+  .prod-form input, .prod-form select { padding: 8px 10px; border-radius: 10px; font-size: .9rem; }
   .prod-preview { position: sticky; top: 78px; }
-  .prod-preview .kpi-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-top: 14px; }
-  .prod-preview .kpi-sm { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
-  .prod-preview .kpi-sm .label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-  .prod-preview .kpi-sm .value { font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .prod-preview .unit-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-  .prod-preview .unit-item { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
-  .prod-preview .unit-item .info { display: flex; flex-direction: column; gap: 2px; }
-  .prod-preview .unit-item .name { font-weight: 700; }
-  .prod-preview .unit-item .meta { font-size: .8rem; color: var(--muted); }
-  .prod-preview .unit-item .price { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .prod-preview .kpi-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+  .prod-preview .kpi-sm { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .prod-preview .kpi-sm .label { font-size: .72rem; color: var(--muted); text-transform: uppercase; }
+  .prod-preview .kpi-sm .value { font-size: .98rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .prod-preview .unit-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .prod-preview .unit-item { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; }
+  .prod-preview .unit-item .info { display: flex; flex-direction: column; gap: 1px; }
+  .prod-preview .unit-item .name { font-weight: 700; font-size: .88rem; }
+  .prod-preview .unit-item .meta { font-size: .74rem; color: var(--muted); }
+  .prod-preview .unit-item .price { font-weight: 800; font-variant-numeric: tabular-nums; font-size: .88rem; }
+  .split-card { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .split-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid var(--line); }
+  .split-header h3 { margin: 0; font-size: .95rem; }
+  .split-header p { margin: 0; color: var(--muted); font-size: .8rem; }
+  .split-body { padding: 12px 14px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 12px; }
+  .split-body .full { grid-column: 1 / -1; }
+  .sale-unit-row { display: grid; grid-template-columns: minmax(150px,1fr) minmax(100px,.75fr) minmax(100px,.75fr) minmax(130px,1fr) auto; gap: 8px; align-items: end; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .sale-unit-row .field { min-width: 0; }
+  .sale-unit-row .sale-unit-custom { display: none; }
+  .sale-unit-row.is-custom .sale-unit-custom { display: block; }
+  .sale-unit-preview { grid-column: 1 / -1; color: var(--muted); font-size: .78rem; }
+  .shared-unit-settings { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .shared-unit-settings summary { cursor: pointer; font-weight: 700; }
+  .shared-unit-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 12px; margin-top: 10px; }
+  .shared-unit-grid .field { margin: 0; }
+  @media (max-width: 700px) { .sale-unit-row { grid-template-columns: repeat(2, minmax(0,1fr)); } .sale-unit-row .sale-unit-actions { grid-column: 1 / -1; } }
 </style>
 
 <div class="prod-layout">
-  <div class="card">
-    <div class="card-head">
-      <div>
-        <h2>{{ 'Modifier le produit' if product else 'Créer un nouveau produit' }}</h2>
-        <p class="sub">Renseignez les infos, le coût de stockage et les unités de vente. Le retour se fait vers le catalogue.</p>
-      </div>
-    </div>
-
-    <form method="post" class="prod-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label for="code">Code produit (auto-généré)</label>
-        <input type="text" id="code" name="code" value="{{ product.code if product else '' }}" {% if not product %}placeholder="Généré automatiquement si vide"{% endif %} {% if product %}readonly{% endif %}>
-      </div>
-      <div class="field">
-        <label for="name">Désignation du produit</label>
-        <input type="text" id="name" name="name" value="{{ product.name if product else '' }}" required placeholder="Ex. Huile, Savon, Bière">
-      </div>
-      <div class="field">
-        <label for="category_id">Catégorie</label>
-        <select id="category_id" name="category_id">
-          <option value="">— Aucune —</option>
-          {% for c in categories %}
-          <option value="{{ c.id }}" {{ 'selected' if product and product.category_id == c.id }}>{{ c.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field">
-        <label for="kind">Nature / Famille</label>
-        <select id="kind" name="kind">
-          {% for code in ['boisson', 'eau', 'lait', 'accessoire', 'autre'] %}
-          <option value="{{ code }}" {{ 'selected' if (product and product.kind == code) or (not product and code == 'autre') }}>{{ code|capitalize }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field full">
-        <label for="type_mesure">Type de produit (pré-remplit l'unité de stock)</label>
-        <select id="type_mesure" name="type_mesure" onchange="applyTypeMesure(this.value, true)">
-          {% for code, (label, base_code, help) in types_mesure.items() %}
-          <option value="{{ code }}" data-base="{{ base_code or '' }}" data-help="{{ help }}" {{ 'selected' if (product and product.type_mesure == code) or (not product and code == 'autre') }}>{{ label }}</option>
-          {% endfor %}
-        </select>
-        <p class="hint" id="type_help"></p>
-      </div>
-      <div class="field">
-        <label for="famille">Famille</label>
-        <input type="text" id="famille" name="famille" list="familles_list" value="{{ product.famille if product and product.famille else '' }}" placeholder="Ex. Fil à coudre, Lait, Eau minérale">
-        <datalist id="familles_list">{% for f in familles %}<option value="{{ f }}">{% endfor %}</datalist>
-      </div>
-      <div class="field">
-        <label for="couleur">Couleur / variante</label>
-        <input type="text" id="couleur" name="couleur" list="couleurs_list" value="{{ product.couleur if product and product.couleur else '' }}" placeholder="Ex. Rouge, Bleu 2">
-        <datalist id="couleurs_list">{% for c in couleurs %}<option value="{{ c }}">{% endfor %}</datalist>
-      </div>
-      <div class="field">
-        <label for="base_unit_id">Unité de stock (comptage)</label>
-        <select id="base_unit_id" name="base_unit_id" required onchange="syncSellingUnitOptions()">
-          <option value="">— Choisir —</option>
-          {% for u in units %}
-          <option value="{{ u.id }}" data-code="{{ u.code }}" {{ 'selected' if product and product.base_unit_id == u.id }}>{{ u.label }} ({{ u.code }})</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field">
-        <label for="currency">Devise</label>
-        <select id="currency" name="currency">
-          {% for cur in currencies %}
-          <option value="{{ cur }}" {{ 'selected' if (product and product.currency == cur) or (not product and cur == 'CDF') }}>{{ cur }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field full">
-        <label for="seuil_alerte">Seuil d'alerte stock bas (dans l'unité de stock)</label>
-        <input type="text" id="seuil_alerte" name="seuil_alerte" value="{{ product.seuil_alerte | qty if product else '0' }}">
+  <div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-head">
+        <div>
+          <h2>{{ 'Modifier le produit' if product else 'Nouveau produit' }}</h2>
+          <p class="sub">Création simple et claire.</p>
+        </div>
       </div>
 
-      <div class="section-title">Prix & valorisation</div>
-      <div class="section-sub">Prix de stockage = coût d'achat par unité de stock. Prix de vente = appliqué selon l'unité choisie au POS.</div>
+      <form method="post" class="prod-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field">
+          <label for="code">Code produit</label>
+          <input type="text" id="code" name="code" value="{{ product.code if product else '' }}" maxlength="40" {{ 'readonly' if product }} placeholder="Généré automatiquement">
+        </div>
+        <div class="field full">
+          <label for="name">Nom du produit *</label>
+          <input type="text" id="name" name="name" value="{{ product.name if product else '' }}" required placeholder="Ex. Lait de vache, Eau, Tissu">
+        </div>
+        <div class="field">
+          <label for="product_preset">Type de produit *</label>
+          <select id="product_preset" name="product_preset" onchange="applyPreset()" {{ 'required' if not product }}>
+            <option value="">— Choisir —</option>
+            <option value="liquide" {{ 'selected' if preset == 'liquide' }}>Liquide (bidon/verre/litre)</option>
+            <option value="carton" {{ 'selected' if preset == 'carton' }}>Produit en carton / emballage</option>
+            <option value="couture" {{ 'selected' if preset == 'couture' }}>Matériel de couture</option>
+            <option value="poids" {{ 'selected' if preset == 'poids' }}>Au poids (kg/g)</option>
+            <option value="tissu" {{ 'selected' if preset == 'tissu' }}>Tissu (m/cm)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="category_id">Catégorie du produit *</label>
+          <select id="category_id" name="category_id" required {{ 'disabled' if not product }}>
+            <option value="">— Choisir —</option>
+            {% for c in categories %}
+            <option value="{{ c.id }}" {{ 'selected' if product and product.category_id == c.id }}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="base_unit_id">Unité de base (comptage du stock) *</label>
+          <select id="base_unit_id" name="base_unit_id" required onchange="syncSellingUnitOptions()" {{ 'disabled' if not product }}>
+            <option value="">— Choisir —</option>
+            {% for u in units %}
+            <option value="{{ u.id }}" data-code="{{ u.code }}" data-unit-kind="{{ u.kind }}" {{ 'selected' if product and product.base_unit_id == u.id }}>{{ u.label }} ({{ u.code }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="kind">Nature</label>
+          <select id="kind" name="kind">
+            {% for code in ['boisson', 'eau', 'lait', 'accessoire', 'autre'] %}
+            <option value="{{ code }}" {{ 'selected' if (product and product.kind == code) or (not product and code == 'autre') }}>{{ code|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="currency">Devise</label>
+          <select id="currency" name="currency">
+            {% for cur in currencies %}
+            <option value="{{ cur }}" {{ 'selected' if (product and product.currency == cur) or (not product and cur == 'CDF') }}>{{ cur }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="seuil_alerte">Seuil d'alerte</label>
+          <input type="text" id="seuil_alerte" name="seuil_alerte" value="{{ product.seuil_alerte | qty if product else '0' }}">
+        </div>
+        <div class="field">
+          <label for="type_mesure">Type de mesure</label>
+          <input type="text" id="type_mesure" name="type_mesure" value="{{ product.type_mesure if product else '' }}" maxlength="30" placeholder="liquide / poids / piece">
+        </div>
+        <div class="field">
+          <label for="famille">Famille / Catégorie technique</label>
+          <input type="text" id="famille" name="famille" value="{{ product.famille if product else '' }}" maxlength="80">
+        </div>
+        <div class="field">
+          <label for="couleur">Couleur</label>
+          <input type="text" id="couleur" name="couleur" value="{{ product.couleur if product else '' }}" maxlength="80">
+        </div>
+        <div class="field">
+          <label for="marque">Marque</label>
+          <input type="text" id="marque" name="marque" value="{{ product.marque if product else '' }}" maxlength="80">
+        </div>
+        <div class="field">
+          <label for="modele">Modèle</label>
+          <input type="text" id="modele" name="modele" value="{{ product.modele if product else '' }}" maxlength="80">
+        </div>
 
+      <div class="section-title">Prix et valorisation</div>
+      <div class="section-sub">Les valeurs actuelles sont préremplies. Laissez-les inchangées si vous ne souhaitez pas les modifier.</div>
       <div class="field">
-        <label for="cost_avg">Prix de stockage / coût moyen (par unité de stock)</label>
-        <input type="text" id="cost_avg" name="cost_avg" value="{{ product.cost_avg | num if product else '0' }}">
+        <label for="cost_avg">Coût moyen par unité de stock ({{ product.base_unit.code if product and product.base_unit else 'unité' }})</label>
+        <input type="text" id="cost_avg" name="cost_avg" value="{{ product.cost_avg|qty if product else '0' }}" inputmode="decimal">
       </div>
       <div class="field">
         <label for="prix_vente_base">Prix de vente par unité de base</label>
-        <input type="text" id="prix_vente_base" name="prix_vente_base" value="{{ base_prix if base_prix is not none else '0' }}" oninput="updateMargin()">
+        <input type="text" id="prix_vente_base" name="prix_vente_base" value="{{ base_prix|qty if base_prix is not none else '0' }}" inputmode="decimal" oninput="updateMargin()">
       </div>
       <div class="field full">
-        <label for="marge_cible">Marge cible (%) — vide = objectif par défaut ({{ default_margin | num }} %)</label>
-        <input type="text" id="marge_cible" name="marge_cible" value="{{ product.marge_cible | num if product and product.marge_cible is not none else '' }}" placeholder="Ex. 25" oninput="updateMargin()">
-        <p class="hint" id="margin_hint"></p>
+        <label for="marge_cible">Marge cible (%) — vide = objectif par défaut ({{ default_margin|num }} %)</label>
+        <input type="text" id="marge_cible" name="marge_cible" value="{{ product.marge_cible|qty if product and product.marge_cible is not none else '' }}" placeholder="Ex. 25" inputmode="decimal" oninput="updateMargin()">
+        <p class="section-sub" id="margin_hint"></p>
       </div>
 
-      <div class="section-title">Unités de vente (détail / gros)</div>
-      <div class="section-sub">Ajoutez Bidon, Bouteille, Verre, Carton, Casier, Sachet avec leur facteur vers l'unité de stock.</div>
-
-      <div class="field">
-        <label for="unite_vente_id">Unité de vente à ajouter / configurer</label>
-        <select id="unite_vente_id" name="unite_vente_id">
-          <option value="">— Choisir une unité (facultatif) —</option>
-          {% for u in units %}
-          <option value="{{ u.id }}">{{ u.label }} ({{ u.code }})</option>
+      <div class="section-title">Unité de vente</div>
+      <div class="section-sub">Quatre lignes sont proposées au départ. Choisissez un format, indiquez son contenu et son prix. Le stock est compté en ml, pièce, g ou cm ; vous pouvez ajouter d'autres formats.</div>
+      <div class="field full">
+        <div id="sale_unit_rows" style="display:grid;gap:8px">
+          {% for pu in custom_selling_units %}
+          <div class="sale-unit-row" data-existing-label="{{ pu.unit.label }}" data-existing-factor="{{ pu.factor }}">
+            <input type="hidden" name="sale_unit_id" value="{{ pu.unit_id }}">
+            <div class="field"><label>Format</label><select name="sale_unit_type" onchange="configureSaleUnitRow(this)"></select></div>
+            <div class="field"><label>Contenu</label><input name="sale_unit_amount" inputmode="decimal" placeholder="Ex. 25" oninput="previewSaleUnit(this)"></div>
+            <div class="field"><label>Unité du contenu</label><select name="sale_unit_measure" onchange="previewSaleUnit(this)"></select></div>
+            <div class="field"><label>Prix ({{ product.currency }})</label><input name="sale_unit_price" inputmode="decimal" value="{{ pu.prix_vente|qty }}" placeholder="Ex. 500"></div>
+            <div class="field sale-unit-actions"><label>POS</label><label><input type="radio" name="sale_unit_default" value="{{ loop.index0 }}" {{ 'checked' if pu.is_sale_default }}> Par défaut</label><button type="button" class="btn danger sm" onclick="removeSaleUnit(this)">Retirer</button></div>
+            <div class="field sale-unit-custom"><label>Nom personnalisé</label><input name="sale_unit_custom_label" maxlength="60" value="{{ pu.unit.label }}" placeholder="Ex. Seau"></div>
+            <div class="sale-unit-preview"></div>
+          </div>
           {% endfor %}
-        </select>
-      </div>
-      <div class="field">
-        <label for="facteur">Facteur vers l'unité de base</label>
-        <input type="text" id="facteur" name="facteur" value="1" placeholder="Ex. 0.2 (1 verre = 0,2 litre)">
-      </div>
-      <div class="field">
-        <label for="prix_vente_unite">Prix de vente pour cette unité</label>
-        <input type="text" id="prix_vente_unite" name="prix_vente_unite" placeholder="Ex. 1500">
-      </div>
-      <div class="field">
-        <label for="devise_unite">Devise</label>
-        <select id="devise_unite" name="devise_unite">
-          {% for cur in currencies %}<option value="{{ cur }}" {{ 'selected' if cur == 'CDF' }}>{{ cur }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="field full">
-        <label><input type="checkbox" name="is_sale_default"> Proposer cette unité par défaut au POS</label>
+        </div>
+        <button type="button" class="btn ghost sm mt-8" onclick="addSaleUnit()">+ Ajouter un format de vente</button>
       </div>
 
-      <div class="section-title">Suivi & options</div>
+      <details class="shared-unit-settings">
+        <summary>Unité standard partagée (facultatif)</summary>
+        <p class="section-sub">Utilisez les formats propres au produit ci-dessus pour définir plusieurs contenus et prix.</p>
+        <div class="shared-unit-grid">
+          <div class="field">
+            <label for="unite_vente_id">Unité standard</label>
+            <select id="unite_vente_id" name="unite_vente_id">
+              <option value="">— Aucune —</option>
+              {% for u in units %}
+              <option value="{{ u.id }}" data-unit-kind="{{ u.kind }}" {{ 'selected' if shared_sale_unit and shared_sale_unit.unit_id == u.id }}>{{ u.label }} ({{ u.code }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="facteur">Contenu en unité de stock</label>
+            <input type="text" id="facteur" name="facteur" value="{{ shared_sale_unit.factor|qty if shared_sale_unit else '1' }}">
+          </div>
+          <div class="field">
+            <label for="prix_vente_unite">Prix de vente</label>
+            <input type="text" id="prix_vente_unite" name="prix_vente_unite" value="{{ shared_sale_unit.prix_vente|qty if shared_sale_unit else '' }}">
+          </div>
+          <div class="field">
+            <label for="devise_unite">Devise</label>
+            <select id="devise_unite" name="devise_unite">
+              {% for cur in currencies %}<option value="{{ cur }}" {{ 'selected' if (shared_sale_unit and shared_sale_unit.currency == cur) or (not shared_sale_unit and product and product.currency == cur) or (not shared_sale_unit and not product and cur == 'CDF') }}>{{ cur }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field full">
+            <label><input type="checkbox" name="is_sale_default" value="1" {{ 'checked' if shared_sale_unit and shared_sale_unit.is_sale_default }}> Par défaut au POS</label>
+          </div>
+        </div>
+      </details>
+
+      {% if not product and stock_manage_allowed %}
+      <div class="section-title">Quantité initiale en stock (facultatif)</div>
       <div class="field">
-        <label><input type="checkbox" name="is_perishable" {{ 'checked' if product and product.is_perishable }}> Produit périssable</label>
+        <label for="initial_quantity">Quantité reçue</label>
+        <input type="text" id="initial_quantity" name="initial_quantity" inputmode="decimal" min="0" value="0" placeholder="Ex. 3">
       </div>
       <div class="field">
-        <label><input type="checkbox" name="track_lot" {{ 'checked' if product and product.track_lot }}> Suivi par lot</label>
+        <label for="initial_unit_factor">Unité de réception</label>
+        <select id="initial_unit_factor" name="initial_unit_factor">
+          <option value="1">Unité de base</option>
+        </select>
+      </div>
+      <p class="section-sub">Une demande d'approvisionnement initiale sera créée et restera en attente de validation du stock.</p>
+      {% endif %}
+
+      <div class="section-title">Options</div>
+      <div class="field">
+        <input type="hidden" name="active" value="0">
+        <label><input type="checkbox" name="active" value="1" {{ 'checked' if not product or product.active }}> Actif</label>
+      </div>
+      <div class="field">
+        <input type="hidden" name="is_perishable" value="0">
+        <label><input type="checkbox" name="is_perishable" value="1" {{ 'checked' if product and product.is_perishable }}> Produit périssable</label>
+      </div>
+      <div class="field">
+        <input type="hidden" name="track_lot" value="0">
+        <label><input type="checkbox" name="track_lot" value="1" {{ 'checked' if product and product.track_lot }}> Suivi par lot</label>
       </div>
       <div class="field">
         <label for="default_expiry_date">Date d'expiration par défaut</label>
         <input type="date" id="default_expiry_date" name="default_expiry_date" value="{{ product.default_expiry_date.strftime('%Y-%m-%d') if product and product.default_expiry_date else '' }}">
-        <p class="hint">Pré-remplie lors des demandes d'entrée en stock.</p>
       </div>
       <div class="field">
         <label for="shelf_life_days">Durée de conservation (jours)</label>
-        <input type="text" id="shelf_life_days" name="shelf_life_days" value="{{ product.shelf_life_days if product and product.shelf_life_days else '' }}" placeholder="Ex. 30">
-        <p class="hint">Alternative : calcul de la péremption à partir du jour de l'entrée.</p>
-      </div>
-      <div class="field">
-        <label><input type="checkbox" name="active" {{ 'checked' if not product or product.active }}> Actif</label>
-      </div>
-      <div class="field full">
-        <label for="notes">Notes / observations</label>
-        <textarea id="notes" name="notes" rows="2" placeholder="Observations facultatives">{{ product.notes if product and product.notes else '' }}</textarea>
+        <input type="number" id="shelf_life_days" name="shelf_life_days" min="0" value="{{ product.shelf_life_days if product and product.shelf_life_days is not none else '' }}">
       </div>
 
       <div class="field full row">
-        <button type="submit" class="btn">Enregistrer le produit</button>
+        <button type="submit" class="btn">Enregistrer</button>
         <a href="{{ url_for('products.index') }}" class="btn ghost">Annuler</a>
       </div>
     </form>
@@ -183,32 +246,231 @@
 
 <script>
 const DEFAULT_MARGIN = {{ default_margin | float | tojson }};
-function applyTypeMesure(code, setBase) {
-  const opt = document.querySelector('#type_mesure option[value="' + code + '"]');
-  if (!opt) return;
-  document.getElementById('type_help').textContent = opt.dataset.help || '';
-  const base = opt.dataset.base;
-  const sel = document.getElementById('base_unit_id');
-  // Ne jamais changer l'unité de stock d'un produit existant sans action explicite :
-  // cela creerait une unite fantome et fausserait stock, prix et conversions.
-  if (setBase && base) {
-    const target = Array.from(sel.options).find(o => o.dataset.code === base);
-    if (target) sel.value = target.value;
+const PRESET_UNIT_KINDS = {
+  liquide: ['volume', 'contenance'],
+  carton: ['piece', 'contenance'],
+  couture: ['piece'],
+  poids: ['poids'],
+  tissu: ['longueur']
+};
+const PRESET_DEFAULT_UNITS = {
+  liquide: 'ML',
+  carton: 'PIECE',
+  couture: 'PIECE',
+  poids: 'G',
+  tissu: 'CM'
+};
+const SALE_FORMAT_OPTIONS = {
+  liquide: [['ml', 'Millilitre'], ['l', 'Litre'], ['verre', 'Verre'], ['bidon', 'Bidon'], ['bouteille', 'Bouteille'], ['custom', 'Autre format']],
+  carton: [['piece', 'Pièce'], ['carton', 'Carton'], ['paquet', 'Paquet'], ['custom', 'Autre format']],
+  couture: [['piece', 'Pièce'], ['custom', 'Autre format']],
+  poids: [['g', 'Gramme'], ['kg', 'Kilogramme'], ['portion', 'Portion'], ['sac', 'Sac'], ['custom', 'Autre format']],
+  tissu: [['cm', 'Centimètre'], ['m', 'Mètre'], ['rouleau', 'Rouleau'], ['custom', 'Autre format']]
+};
+function refreshSaleUnitDefaults() {
+  document.querySelectorAll('#sale_unit_rows .sale-unit-row').forEach(function (row, index) {
+    row.querySelector('input[type="radio"]').value = String(index);
+  });
+}
+function saleUnitMeasures(preset, type) {
+  if (preset === 'liquide') return type === 'verre' ? [['ml', 'ml']] : [['ml', 'ml'], ['l', 'L'], ['base', baseUnitCode()]];
+  if (preset === 'poids') return [['g', 'g'], ['kg', 'kg'], ['base', baseUnitCode()]];
+  if (preset === 'tissu') return [['cm', 'cm'], ['m', 'm'], ['base', baseUnitCode()]];
+  if (preset === 'carton' || preset === 'couture') return [['piece', 'pièce(s)'], ['base', baseUnitCode()]];
+  return [['base', baseUnitCode()]];
+}
+function configureSaleUnitRow(select, preserve) {
+  const row = select.closest('.sale-unit-row');
+  const preset = document.getElementById('product_preset').value;
+  const type = select.value;
+  const amount = row.querySelector('[name="sale_unit_amount"]');
+  const measure = row.querySelector('[name="sale_unit_measure"]');
+  const customLabel = row.querySelector('[name="sale_unit_custom_label"]');
+  const fixed = {ml: ['1', 'ml'], l: ['1', 'l'], g: ['1', 'g'], kg: ['1', 'kg'], cm: ['1', 'cm'], m: ['1', 'm'], piece: ['1', 'piece']};
+  const oldAmount = preserve ? amount.value : '';
+  const oldMeasure = preserve ? measure.value : '';
+  measure.innerHTML = '';
+  saleUnitMeasures(preset, type).forEach(function (item) {
+    const option = document.createElement('option');
+    option.value = item[0];
+    option.textContent = item[1];
+    measure.appendChild(option);
+  });
+  if (fixed[type]) {
+    amount.value = fixed[type][0];
+    amount.readOnly = true;
+    measure.value = fixed[type][1];
+  } else {
+    amount.readOnly = false;
+    amount.value = oldAmount;
+    const preferredMeasure = (type === 'bidon' || type === 'bouteille') && preset === 'liquide'
+      ? 'l'
+      : (type === 'sac' || type === 'portion') && preset === 'poids'
+        ? 'kg'
+        : (type === 'rouleau' && preset === 'tissu' ? 'm' : measure.options[0].value);
+    measure.value = oldMeasure && Array.from(measure.options).some(function (option) { return option.value === oldMeasure; })
+      ? oldMeasure
+      : preferredMeasure;
+    amount.min = type === 'verre' ? '1' : '0.0001';
+    amount.max = type === 'verre' ? '1000' : '';
   }
-  syncSellingUnitOptions();
+  const needsCustomName = type === 'custom';
+  row.classList.toggle('is-custom', needsCustomName);
+  customLabel.required = needsCustomName;
+  amount.required = !!type && !fixed[type];
+  row.querySelector('[name="sale_unit_price"]').required = !!type;
+  previewSaleUnit(amount);
+}
+function populateSaleUnitRow(row, preset) {
+  const select = row.querySelector('[name="sale_unit_type"]');
+  const existing = row.dataset.existingLabel !== undefined;
+  select.innerHTML = '<option value="">— Choisir un format —</option>';
+  (SALE_FORMAT_OPTIONS[preset] || []).forEach(function (item) {
+    const option = document.createElement('option');
+    option.value = item[0];
+    option.textContent = item[1];
+    select.appendChild(option);
+  });
+  if (existing) {
+    select.value = 'custom';
+    row.querySelector('[name="sale_unit_amount"]').value = row.dataset.existingFactor;
+    row.querySelector('[name="sale_unit_custom_label"]').value = row.dataset.existingLabel;
+    row.querySelector('[name="sale_unit_measure"]').innerHTML = '';
+    const baseOption = document.createElement('option');
+    baseOption.value = 'base';
+    baseOption.textContent = baseUnitCode();
+    row.querySelector('[name="sale_unit_measure"]').appendChild(baseOption);
+    configureSaleUnitRow(select, true);
+  } else {
+    select.value = '';
+    row.querySelector('[name="sale_unit_amount"]').value = '';
+    row.querySelector('[name="sale_unit_custom_label"]').value = '';
+    row.querySelector('[name="sale_unit_price"]').required = false;
+    configureSaleUnitRow(select, false);
+  }
+}
+function addSaleUnit(existingLabel, existingFactor, existingId, price, isDefault) {
+  const row = document.createElement('div');
+  row.className = 'sale-unit-row';
+  row.innerHTML = '<input type="hidden" name="sale_unit_id" value="">'
+    + '<div class="field"><label>Format</label><select name="sale_unit_type" onchange="configureSaleUnitRow(this)"></select></div>'
+    + '<div class="field"><label>Contenu</label><input name="sale_unit_amount" inputmode="decimal" placeholder="Ex. 25" oninput="previewSaleUnit(this)"></div>'
+    + '<div class="field"><label>Unité du contenu</label><select name="sale_unit_measure" onchange="previewSaleUnit(this)"></select></div>'
+    + '<div class="field"><label>Prix</label><input name="sale_unit_price" inputmode="decimal" placeholder="Ex. 500"></div>'
+    + '<div class="field sale-unit-actions"><label>POS</label><label><input type="radio" name="sale_unit_default" value=""> Par défaut</label><button type="button" class="btn danger sm" onclick="removeSaleUnit(this)">Retirer</button></div>'
+    + '<div class="field sale-unit-custom"><label>Nom personnalisé</label><input name="sale_unit_custom_label" maxlength="60" placeholder="Ex. Seau"></div>'
+    + '<div class="sale-unit-preview"></div>';
+  row.querySelector('[name="sale_unit_id"]').value = existingId || '';
+  row.querySelector('[name="sale_unit_price"]').value = price || '';
+  row.querySelector('input[type="radio"]').checked = !!isDefault;
+  if (existingLabel !== undefined) {
+    row.dataset.existingLabel = existingLabel;
+    row.dataset.existingFactor = existingFactor;
+  }
+  document.getElementById('sale_unit_rows').appendChild(row);
+  populateSaleUnitRow(row, document.getElementById('product_preset').value);
+  refreshSaleUnitDefaults();
+  return row;
+}
+function removeSaleUnit(button) {
+  button.closest('.sale-unit-row').remove();
+  refreshSaleUnitDefaults();
+}
+function baseUnitCode() {
+  const select = document.getElementById('base_unit_id');
+  const option = select.options[select.selectedIndex];
+  return option && option.dataset.code ? option.dataset.code : 'unité de base';
+}
+function previewSaleUnit(input) {
+  const row = input.closest('.sale-unit-row');
+  const amount = row.querySelector('[name="sale_unit_amount"]').value;
+  const measure = row.querySelector('[name="sale_unit_measure"]');
+  const unit = measure.options[measure.selectedIndex];
+  const format = row.querySelector('[name="sale_unit_type"]').selectedOptions[0];
+  const type = row.querySelector('[name="sale_unit_type"]').value;
+  const preview = row.querySelector('.sale-unit-preview');
+  if (!type || !amount || !unit) {
+    preview.textContent = '';
+    return;
+  }
+  preview.textContent = 'Au POS : 1 ' + format.textContent.toLowerCase() + ' retire ' + amount + ' ' + unit.textContent + ' du stock.';
+}
+function filterPresetUnits(select, preset, preferredCode, lockToPreferred) {
+  if (!select) return;
+  const allowed = PRESET_UNIT_KINDS[preset] || [];
+  let selectedAllowed = false;
+  Array.from(select.options).forEach(function (option) {
+    if (!option.value) return;
+    const compatible = !preset || (
+      allowed.includes(option.dataset.unitKind)
+      && (!lockToPreferred || option.dataset.code === preferredCode)
+    );
+    option.hidden = !compatible;
+    option.disabled = !compatible;
+    if (option.value === select.value && compatible) selectedAllowed = true;
+  });
+  if (!selectedAllowed) {
+    const preferred = Array.from(select.options).find(function (option) {
+      return option.dataset.code === preferredCode && !option.disabled;
+    });
+    const first = Array.from(select.options).find(function (option) {
+      return option.value && !option.disabled;
+    });
+    select.value = preferred ? preferred.value : (first ? first.value : '');
+  }
 }
 function syncSellingUnitOptions() {
   const baseSel = document.getElementById('base_unit_id');
   const sellSel = document.getElementById('unite_vente_id');
   if (!baseSel || !sellSel) return;
   const base = baseSel.value;
+  const preset = document.getElementById('product_preset').value;
+  const allowed = PRESET_UNIT_KINDS[preset] || [];
   Array.from(sellSel.options).forEach(function (o) {
     if (!o.value) return;
     const clash = o.value === base;
-    o.disabled = clash;
-    o.hidden = clash;
-    if (clash && sellSel.value === o.value) sellSel.value = '';
+    const incompatible = preset && !allowed.includes(o.dataset.unitKind);
+    o.disabled = clash || incompatible;
+    o.hidden = clash || incompatible;
+    if ((clash || incompatible) && sellSel.value === o.value) sellSel.value = '';
   });
+}
+
+function calcAchatCost() {
+  const cont = parseFloat((document.getElementById('achat_contenu').value || '').replace(',', '.'));
+  const prix = parseFloat((document.getElementById('achat_prix').value || '').replace(',', '.'));
+  if (cont > 0 && prix > 0) {
+    const cout = prix / cont;
+    document.getElementById('achat_cout_calc').value = cout.toFixed(4);
+    document.getElementById('cost_avg').value = cout.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  }
+}
+function computeFactorFromPack() {
+  const qty = parseFloat((document.getElementById('calc_small_qty').value || '').replace(',', '.'));
+  if (!qty || qty <= 0) { alert('Indiquez la contenance de l\'unité de détail dans l\'unité de base.'); return; }
+  document.getElementById('facteur').value = qty;
+  alert('Facteur appliqué : 1 unité de vente = ' + qty + ' dans l\'unité de base');
+}
+function applyPreset() {
+  const v = document.getElementById('product_preset').value;
+  const base = document.getElementById('base_unit_id');
+  const creating = {{ 'true' if not product else 'false' }};
+  document.getElementById('category_id').disabled = creating && !v;
+  base.disabled = creating && !v;
+  if (creating && v) {
+    const preferred = Array.from(base.options).find(function (option) {
+      return option.dataset.code === PRESET_DEFAULT_UNITS[v];
+    });
+    if (preferred) base.value = preferred.value;
+  }
+  filterPresetUnits(base, v, PRESET_DEFAULT_UNITS[v], creating);
+  if (v) {
+    Array.from(document.querySelectorAll('#sale_unit_rows .sale-unit-row')).forEach(function (row) {
+      populateSaleUnitRow(row, v);
+    });
+    while (document.querySelectorAll('#sale_unit_rows .sale-unit-row').length < 4) addSaleUnit();
+  }
+  syncSellingUnitOptions();
 }
 function updateMargin() {
   const price = parseFloat((document.getElementById('prix_vente_base').value || '0').replace(',', '.')) || 0;
@@ -224,10 +486,68 @@ function updateMargin() {
   else txt += 'Objectif atteint.';
   hint.textContent = txt;
 }
+function initialReceiptFactor(row) {
+  const amount = parseFloat((row.querySelector('[name="sale_unit_amount"]').value || '').replace(',', '.'));
+  const measure = row.querySelector('[name="sale_unit_measure"]').value;
+  const preset = document.getElementById('product_preset').value;
+  const base = baseUnitCode();
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (measure === 'base' || measure === 'piece') return amount;
+  const factors = {
+    liquide: {ML: {ml: 1, l: 1000}, L: {ml: 0.001, l: 1}},
+    poids: {G: {g: 1, kg: 1000}, KG: {g: 0.001, kg: 1}},
+    tissu: {CM: {cm: 1, m: 100}, M: {cm: 0.01, m: 1}}
+  };
+  const conversion = factors[preset] && factors[preset][base] && factors[preset][base][measure];
+  if (conversion) return amount * conversion;
+  if ((preset === 'carton' || preset === 'couture') && measure === 'piece') return amount;
+  return null;
+}
+function refreshInitialReceiptUnits() {
+  const select = document.getElementById('initial_unit_factor');
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = '<option value="1">Unité de base</option>';
+  document.querySelectorAll('#sale_unit_rows .sale-unit-row').forEach(function (row) {
+    const type = row.querySelector('[name="sale_unit_type"]').value;
+    const factor = initialReceiptFactor(row);
+    if (!type || factor === null || factor <= 0) return;
+    const measureSelect = row.querySelector('[name="sale_unit_measure"]');
+    const measure = measureSelect.selectedOptions[0];
+    const format = row.querySelector('[name="sale_unit_custom_label"]').value
+      || row.querySelector('[name="sale_unit_type"]').selectedOptions[0].textContent;
+    const option = document.createElement('option');
+    option.value = String(factor);
+    option.textContent = format + ' (' + row.querySelector('[name="sale_unit_amount"]').value + ' '
+      + (measure ? measure.textContent : '') + ')';
+    select.appendChild(option);
+  });
+  if (Array.from(select.options).some(function (option) { return option.value === previous; })) {
+    select.value = previous;
+  }
+}
 document.addEventListener('DOMContentLoaded', function () {
-  applyTypeMesure(document.getElementById('type_mesure').value, false);
+  const legacyDefault = document.querySelector('input[name="is_sale_default"]');
+  if (legacyDefault) {
+    legacyDefault.addEventListener('change', function () {
+      if (legacyDefault.checked) {
+        document.querySelectorAll('#sale_unit_rows input[type="radio"]').forEach(function (radio) {
+          radio.checked = false;
+        });
+      }
+    });
+  }
+  document.getElementById('sale_unit_rows').addEventListener('change', function (event) {
+    if (event.target.matches('input[type="radio"]') && event.target.checked && legacyDefault) {
+      legacyDefault.checked = false;
+    }
+  });
   syncSellingUnitOptions();
   updateMargin();
+  applyPreset();
+  document.getElementById('sale_unit_rows').addEventListener('input', refreshInitialReceiptUnits);
+  document.getElementById('sale_unit_rows').addEventListener('change', refreshInitialReceiptUnits);
+  refreshInitialReceiptUnits();
 });
 </script>
 

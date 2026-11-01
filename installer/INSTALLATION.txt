@@ -1,0 +1,146 @@
+============================================================================
+           GUIDE D'INSTALLATION - BOUTIQUEGEST
+           Système de gestion commerciale
+============================================================================
+
+CONTENU DU DOSSIER INSTALLER:
+------------------------------
+- install.ps1           : Script d'installation automatique
+- start_app.bat         : Script de démarrage de l'application
+- check_python.ps1      : Vérification des prérequis
+- create_shortcut.ps1   : Création du raccourci bureau
+- generate_icon.py      : Génération de l'icône
+- icon.ico              : Icône de l'application
+- README.md             : Documentation détaillée
+
+INSTRUCTIONS D'INSTALLATION:
+-----------------------------
+
+OPTION 1: INSTALLATION AUTOMATIQUE (RECOMMANDÉE)
+------------------------------------------------
+
+1. Assurez-vous que Python 3.12 est installé sur votre ordinateur
+   - Téléchargez: https://www.python.org/downloads/
+   - Cochez "Add Python to PATH" lors de l'installation
+
+2. Ouvrez PowerShell en tant qu'administrateur:
+   - Clic droit sur le menu Démarrer
+   - Sélectionnez "Windows PowerShell (administrateur)"
+
+3. Naviguez vers le dossier installer:
+   cd C:\Users\kitima\Desktop\BoutiqueGest\installer
+
+4. Exécutez le script d'installation:
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   .\install.ps1
+
+5. Attendez la fin de l'installation (quelques minutes)
+
+6. L'installation terminée, un raccourci "BoutiqueGest" apparaît sur votre bureau
+
+
+OPTION 2: INSTALLATION MANUELLE
+-------------------------------
+
+Si l'installation automatique échoue, suivez ces étapes:
+
+1. Vérifiez Python:
+   .\check_python.ps1
+
+2. Si Python n'est pas installé, installez-le depuis python.org
+
+3. Créez l'environnement virtuel:
+   cd C:\Users\kitima\Desktop\BoutiqueGest
+   python -m venv .venv
+
+4. Activez l'environnement virtuel:
+   .venv\Scripts\activate
+
+5. Installez les dépendances:
+   pip install -r requirements.txt
+
+6. Initialisez la base de données:
+   python -m flask --app run.py db upgrade
+   python -m flask --app run.py seed
+
+7. Créez le raccourci bureau:
+   cd installer
+   .\create_shortcut.ps1
+
+
+DÉMARRAGE DE L'APPLICATION:
+----------------------------
+
+MÉTHODE 1: Via le raccourci bureau
+- Double-cliquez sur "BoutiqueGest" sur votre bureau
+
+MÉTHODE 2: Via le script
+- Double-cliquez sur: installer\start_app.bat
+
+MÉTHODE 3: Via la ligne de commande
+- Ouvrez PowerShell dans le dossier BoutiqueGest
+- .venv\Scripts\activate
+- python run_waitress.py
+
+
+ACCÈS À L'APPLICATION:
+-----------------------
+
+URL: http://127.0.0.1:5000
+
+Identifiant par défaut:
+- Utilisateur: admin
+- Mot de passe: admin123
+
+⚠ IMPORTANT: Changez le mot de passe admin après la première connexion!
+
+
+DÉPANNAGE:
+----------
+
+PROBLÈME: Python n'est pas reconnu
+SOLUTION: Réinstallez Python en cochant "Add Python to PATH"
+
+PROBLÈME: Erreur lors de l'installation des dépendances
+SOLUTION:
+  pip install --upgrade pip
+  pip install -r requirements.txt
+
+PROBLÈME: Le serveur ne démarre pas
+SOLUTION:
+  - Vérifiez que le port 5000 n'est pas utilisé
+  - Fermez les autres instances de l'application
+  - Redémarrez votre ordinateur si nécessaire
+
+PROBLÈME: Erreur de base de données
+SOLUTION:
+  cd C:\Users\kitima\Desktop\BoutiqueGest
+  Ne supprimez pas instance\boutiquegest.db : les données de la boutique seraient perdues.
+  Vérifiez d'abord le fichier .env et la dernière sauvegarde.
+  .venv\Scripts\python.exe -m flask --app run db upgrade
+  .venv\Scripts\python.exe -m flask --app run seed
+
+
+CONFIGURATION WAITRESS:
+-----------------------
+
+L'application utilise Waitress comme serveur avec les paramètres:
+- Host: 127.0.0.1 (localhost)
+- Port: 5000
+- Threads: 8 workers
+- Performance optimisée pour un démarrage rapide
+
+
+SUPPORT:
+--------
+
+Pour toute question ou problème technique:
+1. Consultez le fichier README.md dans le dossier installer
+2. Vérifiez les logs dans la console de l'application
+3. Assurez-vous que tous les prérequis sont satisfaits
+
+
+============================================================================
+Version: 1.0
+Date: 2026-10-27
+============================================================================

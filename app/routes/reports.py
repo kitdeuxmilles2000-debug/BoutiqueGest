@@ -29,6 +29,7 @@ def _build_context():
     debut, fin = reports_service.period_bounds(periode)
 
     ventes = reports_service.ventes_summary(debut, fin)
+    achats = reports_service.achats_summary(debut, fin)
     charges, expenses = reports_service.charges_summary(debut, fin)
     par_nature, par_devise = reports_service.tresorerie_summary(debut, fin)
     resultat = reports_service.result_summary(debut, fin)
@@ -42,6 +43,7 @@ def _build_context():
         "debut": debut,
         "fin": fin,
         "ventes": ventes,
+        "achats": achats,
         "charges": charges,
         "expenses": expenses,
         "tresorerie_nature": par_nature,
@@ -81,9 +83,18 @@ def export_csv():
     writer.writerow([])
 
     writer.writerow(["VENTES PAR DEVISE"])
-    writer.writerow(["Devise", "Nombre", "CA", "Cout marchandises", "Marge"])
+    writer.writerow(["Devise", "Nombre", "CA", "Cout marchandises", "Marge brute", "Marge brute %"])
     for cur, v in ctx["ventes"].items():
-        writer.writerow([cur, v["count"], str(v["ca"]), str(v["cout"]), str(v["marge"])])
+        writer.writerow([
+            cur, v["count"], str(v["ca"]), str(v["cout"]), str(v["marge"]),
+            str(v["taux_marge"]) if v["taux_marge"] is not None else "",
+        ])
+    writer.writerow([])
+
+    writer.writerow(["ACHATS RECUS"])
+    writer.writerow(["Devise", "Nombre", "Total des achats"])
+    for cur, achat in ctx["achats"].items():
+        writer.writerow([cur, achat["count"], str(achat["total"])])
     writer.writerow([])
 
     writer.writerow(["CHARGES (depenses validees)"])
@@ -106,11 +117,13 @@ def export_csv():
     writer.writerow([])
 
     writer.writerow(["TOP PRODUITS"])
-    writer.writerow(["Produit", "Quantite (base)", "CA", "Marge", "Devise"])
+    writer.writerow(["Produit", "Quantite (base)", "CA net", "Marge brute", "Marge brute %", "Devise"])
     for row in ctx["top"]:
         writer.writerow([
             row["product"].name if row["product"] else "?",
-            str(row["qte"]), str(row["ca"]), str(row["marge"]), row["currency"],
+            str(row["qte"]), str(row["ca"]), str(row["marge"]),
+            str(row["taux_marge"]) if row["taux_marge"] is not None else "",
+            row["currency"],
         ])
     writer.writerow([])
 

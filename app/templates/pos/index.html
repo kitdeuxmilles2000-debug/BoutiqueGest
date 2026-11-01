@@ -223,6 +223,11 @@ let receivedManual = false;
 
 function money(n) { return Number(n).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function fmt(n){ return money(n) + ' ' + CURRENCY; }
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, function (char) {
+    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char];
+  });
+}
 
 function setInvoiceDate(){
   const el = document.getElementById('invoiceDate');
@@ -301,8 +306,8 @@ function render() {
     body.innerHTML = cart.map(l => `
       <tr>
         <td>
-          <div class="line-name">${l.name}</div>
-          <div class="line-unit">${l.unit_label} ${marginBadge(l)}</div>
+          <div class="line-name">${escapeHtml(l.name)}</div>
+          <div class="line-unit">${escapeHtml(l.unit_label)} ${marginBadge(l)}</div>
         </td>
         <td class="num qty-cell">
           <span class="qty-pill">

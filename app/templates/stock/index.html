@@ -1,11 +1,17 @@
 {% extends "base.html" %}
-{% from "_macros.html" import show_pager %}
+{% from "_macros.html" import show_pager, table_action %}
 {% block title %}Stock{% endblock %}
 {% block heading %}Stock{% endblock %}
 
 {% block content %}
 <div class="grid cols-3">
-  <div class="card kpi"><span class="label">Valeur totale du stock</span><span class="value">{{ total_value | num }}</span><span class="foot">Par produit valorisé au coût moyen</span></div>
+  {% for cur, totals in stock_totals.items() %}
+  <div class="card kpi">
+    <span class="label">Valeur du stock · {{ cur }}</span>
+    <span class="value">{{ totals.stock_value | num }} {{ cur }}</span>
+    <span class="foot">Marge brute potentielle estimée sur {{ totals.priced_products }} produit(s) tarifé(s) : {{ totals.potential_margin | num }} {{ cur }}</span>
+  </div>
+  {% endfor %}
   <div class="card kpi"><span class="label">Produits en rupture</span><span class="value {{ 'bad' if alerts.out_of_stock }}">{{ alerts.out_of_stock|length }}</span><span class="foot">À réapprovisionner</span></div>
   <div class="card kpi"><span class="label">Stock bas</span><span class="value" style="color:var(--warning)">{{ alerts.low_stock|length }}</span><span class="foot">Sous le seuil d'alerte</span></div>
 </div>
@@ -49,17 +55,17 @@
   <div class="card-head">
     <div>
       <h2>État du stock</h2>
-      <p class="sub">{{ products|length }} produit(s) actif(s) — Total quantité : <strong>{{ (products | sum(attribute='stock_qty')) | qty }}</strong> — Valeur totale : <strong>{{ total_value | num }}</strong></p>
+      <p class="sub">{{ product_count }} produit(s) actif(s). Valeur et marges calculées séparément par devise, au coût moyen et au prix du format de vente par défaut.</p>
     </div>
     <div class="toolbar">
-      {% if current_user.has_permission(P.STOCK_MANAGE) %}<a href="{{ url_for('stock.entry') }}" class="btn sm">+ Demande d'entrée</a>{% endif %}
+      {% if current_user.has_permission(P.STOCK_MANAGE) %}<a href="{{ url_for('stock.entry') }}" class="btn sm">+ Entrée / Créer un produit</a>{% endif %}
     {% if current_user.has_permission(P.LOSS_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Déclarer une perte</a>{% endif %}
     {% if current_user.has_permission(P.INVENTORY_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Inventaire</a>{% endif %}
     </div>
   </div>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Code</th><th>Produit</th><th>Catégorie</th><th>Quantité en stock</th><th>Unité</th><th>Coût moyen / unité</th><th>Valeur du stock</th><th>Seuil</th><th>État</th><th></th></tr></thead>
+      <thead><tr><th>Code</th><th>Produit</th><th>Catégorie</th><th>Quantité en stock</th><th>Unité</th><th>Coût moyen / unité</th><th>Valeur du stock</th><th>Marge potentielle estimée</th><th>Seuil</th><th>État</th><th></th></tr></thead>
       <tbody>
         {% for p in products %}
         <tr>
@@ -70,26 +76,46 @@
           <td>{{ p.base_unit.code if p.base_unit else '—' }}</td>
           <td class="num">{{ p.cost_avg | num }} {{ p.currency }}</td>
           <td class="num">{{ p.stock_value | num }} {{ p.currency }}</td>
+          {% set margin = product_margins.get(p.id) %}
+          <td class="num">
+            {% if margin %}
+              <strong class="{{ 'good' if margin.margin >= 0 else 'bad' }}">{{ margin.margin | num }} {{ p.currency }}</strong><br>
+              <span class="muted">Prix {{ margin.unit_label }} : {{ margin.unit_price | num }} {{ p.currency }}</span>
+              {% if margin.margin_percent is not none %}<br><span class="muted">{{ margin.margin_percent | num }} % du chiffre d'affaires potentiel</span>{% endif %}
+            {% else %}
+              <span class="muted">Prix de vente non défini</span>
+            {% endif %}
+          </td>
           <td class="num">{{ p.seuil_alerte | qty }}</td>
           <td>
             {% if p.is_out_of_stock %}<span class="badge red">Rupture</span>
             {% elif p.is_low_stock %}<span class="badge amber">Stock bas</span>
             {% else %}<span class="badge green">OK</span>{% endif %}
           </td>
-          <td><a class="btn ghost sm" href="{{ url_for('products.detail', product_id=p.id) }}">Fiche</a></td>
+          <td>
+            <div class="row" style="gap:4px;flex-wrap:nowrap">
+            {{ table_action(url_for('products.detail', product_id=p.id), 'view', 'Voir la fiche produit') }}
+            {% if current_user.has_permission(P.STOCK_MANAGE) %}
+            <button type="button" class="btn sm btn-icon" title="Ravitailler {{ p.name }}" aria-label="Ravitailler {{ p.name }}" onclick="openRestock({{ p.id }}, {{ p.name|tojson }})">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16l-1 13H5L4 7Zm4 0V5a4 4 0 0 1 8 0v2m-4 3v6m-3-3h6" /></svg>
+            </button>
+            {% endif %}
+            </div>
+          </td>
         </tr>
         {% else %}
-        <tr><td colspan="10" class="muted">Aucun produit actif.</td></tr>
+        <tr><td colspan="11" class="muted">Aucun produit actif.</td></tr>
         {% endfor %}
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="3"><strong>TOTAUX</strong></td>
-          <td class="num"><strong>{{ total_qty | qty }}</strong></td>
-          <td></td>
-          <td></td>
-          <td class="num"><strong>{{ total_value | num }}</strong></td>
-          <td colspan="3"></td>
+          <td colspan="6"><strong>VALEUR TOTALE PAR DEVISE</strong></td>
+          <td class="num">
+            {% for cur, totals in stock_totals.items() %}
+              <strong>{{ totals.stock_value | num }} {{ cur }}</strong>{% if not loop.last %}<br>{% endif %}
+            {% endfor %}
+          </td>
+          <td colspan="4"></td>
         </tr>
       </tfoot>
     </table>
@@ -99,4 +125,53 @@
     </table>
   </div>
 </div>
+<div class="modal" id="restock_modal">
+  <div class="modal-dialog" style="max-width:420px">
+    <form method="post" id="restock_form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header">
+        <h3>Ravitailler</h3>
+        <button type="button" class="btn ghost sm" onclick="closeRestock()">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="sub">Ajouter au stock existant (sans créer de doublon). Le coût saisi est par unité de stock.</p>
+        <div class="field full">
+          <label>Produit</label>
+          <input type="text" id="restock_product" readonly>
+        </div>
+        <div class="field full">
+          <label for="restock_qty">Quantité à ajouter</label>
+          <input type="text" id="restock_qty" name="quantity" placeholder="Dans l'unité de base">
+        </div>
+        <div class="field full">
+          <label for="restock_cost">Prix d'achat par unité de stock (facultatif)</label>
+          <input type="text" id="restock_cost" name="cost_unit" placeholder="Laisser vide pour conserver le coût moyen">
+        </div>
+        <div class="field full">
+          <label for="restock_reason">Motif</label>
+          <input type="text" id="restock_reason" name="reason" value="Ravitaillement">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn ghost" onclick="closeRestock()">Annuler</button>
+        <button type="submit" class="btn">Confirmer</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+function openRestock(id, name) {
+  const form = document.getElementById('restock_form');
+  form.action = "{{ url_for('stock.restock', product_id=0) }}".replace('0', id);
+  document.getElementById('restock_product').value = name;
+  document.getElementById('restock_qty').value = '';
+  document.getElementById('restock_cost').value = '';
+  document.getElementById('restock_reason').value = 'Ravitaillement';
+  document.getElementById('restock_modal').classList.add('show');
+  setTimeout(function(){ document.getElementById('restock_qty').focus(); }, 50);
+}
+function closeRestock() {
+  document.getElementById('restock_modal').classList.remove('show');
+}
+</script>
 {% endblock %}

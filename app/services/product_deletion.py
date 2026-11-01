@@ -7,7 +7,7 @@ d'inventaire et lignes d'achat lies au produit sont supprimes.
 from decimal import Decimal
 
 from app.extensions import db
-from app.models.catalog import PriceHistory, Product, ProductUnit
+from app.models.catalog import PriceHistory, Product, ProductUnit, Unit
 from app.models.finance import Credit, Settlement
 from app.models.notifications import Notification
 from app.models.purchases import Purchase, PurchaseLine
@@ -166,6 +166,8 @@ def delete_product(product, *, commit=True):
     )
 
     db.session.delete(product)
+    db.session.flush()
+    Unit.query.filter_by(product_id=product_id).delete(synchronize_session=False)
     db.session.flush()
     if commit:
         db.session.commit()

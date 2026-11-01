@@ -1,10 +1,7 @@
-"""Evenements de synchronisation (file d'attente locale, idempotente).
+"""Ancienne file d'événements conservée pour compatibilité avec les bases existantes.
 
-Chaque operation metier sensible cree un SyncEvent portant un UUID unique.
-Le serveur distant detecte les doublons par UUID : rejouer un evenement
-deja acquitte ne cree rien de nouveau (idempotence par cle d'idempotence).
-
-Le serveur local reste la reference ; la sync ne conditionne jamais une vente.
+Le transfert actuel utilise des instantanés complets dans app.services.sync; ces
+événements historiques ne sont plus envoyés au serveur distant.
 """
 from app.extensions import db
 from app.models.base import BaseModel, utcnow

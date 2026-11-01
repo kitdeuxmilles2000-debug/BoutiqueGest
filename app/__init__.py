@@ -1,7 +1,7 @@
 """Application factory de BoutiqueGest."""
 import os
 
-from flask import Flask, render_template
+from flask import Flask, abort, render_template, request
 
 from app.config import CONFIG_MAP
 from app.extensions import csrf, db, login_manager, migrate
@@ -21,6 +21,7 @@ def create_app(config_name=None):
     _register_blueprints(app)
     _register_context(app)
     _register_errors(app)
+    _register_read_only_mode(app)
 
     from app.cli import register_cli
 
@@ -59,6 +60,7 @@ def _register_blueprints(app):
     from app.routes.sales import sales_bp
     from app.routes.stock import stock_bp
     from app.routes.notifications import notifications_bp
+    from app.routes.sync_api import sync_api_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
@@ -73,6 +75,7 @@ def _register_blueprints(app):
     app.register_blueprint(partners_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(sync_api_bp)
 
 
 def _register_context(app):
@@ -117,9 +120,24 @@ def _register_context(app):
             "OUTBOX_STATUS_BADGES": OUTBOX_STATUS_BADGES,
             "NOTIFICATION_TYPE_LABELS": NOTIFICATION_TYPE_LABELS,
             "NOTIFICATION_TYPE_BADGES": NOTIFICATION_TYPE_BADGES,
+            "cloud_read_only": app.config.get("CLOUD_READ_ONLY", False),
             "is_owner": lambda: is_owner(current_user),
             "now_date": date.today(),
         }
+
+
+def _register_read_only_mode(app):
+    @app.before_request
+    def reject_cloud_writes():
+        if not app.config.get("CLOUD_READ_ONLY"):
+            return None
+        if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+            return None
+        if request.endpoint == "sync_api.receive_snapshot":
+            return None
+        if request.endpoint and request.endpoint.startswith("auth."):
+            return None
+        abort(403, description="Cette instance en ligne est en lecture seule.")
 
 
 def _register_errors(app):

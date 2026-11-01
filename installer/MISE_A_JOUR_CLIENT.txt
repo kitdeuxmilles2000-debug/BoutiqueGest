@@ -1,0 +1,49 @@
+BOUTIQUEGEST - PAQUET DE MISE A JOUR CLIENT
+============================================
+
+PREPARATION DU PAQUET
+---------------------
+Depuis le dossier du projet a jour, executer :
+  powershell -NoProfile -ExecutionPolicy Bypass -File installer\Build-ClientUpdate.ps1
+
+Le dossier de sortie choisi contient les fichiers a copier chez le client.
+Ne pas copier ce paquet dans le depot Git : il est genere pour distribution.
+
+MISE A JOUR CHEZ LE CLIENT
+--------------------------
+1. Fermer BoutiqueGest.
+2. Copier le dossier de paquet cree sur le PC client et l'extraire.
+3. Executer Mettre_A_Jour_Client.bat.
+4. Indiquer le dossier racine de l'installation (celui qui contient run_waitress.py).
+5. Si Windows le demande, autoriser la reparation du raccourci.
+6. Accepter une migration uniquement si une mise a jour de base est necessaire.
+   Le script MISE_A_JOUR_CLIENT.bat cree et verifie une sauvegarde avant migration.
+
+PROTECTION DES DONNEES
+----------------------
+Le paquet ne contient pas la base SQLite, .env, .venv, les sauvegardes ni uploads.
+La copie ne remplace ni ne supprime ces donnees. Aucune migration n'est lancee
+automatiquement au demarrage. Les migrations sont une etape distincte et volontaire.
+
+Le raccourci Bureau est recree avec le chemin reel de l'installation et lance
+run_waitress.py via Waitress. Il fonctionne meme si le dossier n'est pas
+installe sous C:\BoutiqueGest.
+
+SYNCHRONISATION VERS RENDER
+---------------------------
+La synchronisation est configuree dans le fichier .env local, qui n'est jamais
+remplace par ce paquet. Pour l'activer, ajouter au .env du PC boutique :
+  SYNC_ENABLED=1
+  SYNC_REMOTE_URL=https://votre-service.onrender.com/api/sync/snapshot
+  SYNC_API_TOKEN=jeton-copie-depuis-les-parametres-secrets-Render
+
+Render doit avoir le meme SYNC_API_TOKEN et CLOUD_READ_ONLY=1. Redemarrer
+Waitress, puis lancer Administration > Synchronisation > Synchroniser maintenant.
+Ne jamais envoyer le jeton dans le paquet, Git ou un message public.
+
+PUBLICATION EN LIGNE
+--------------------
+La version Render est mise a jour par le depot Git connecte au service Render :
+publier le code dans la branche configuree declenche le deploiement Render.
+Ne jamais versionner ni inclure une base client, un fichier .env ou un secret
+dans le paquet ou dans le depot de code.

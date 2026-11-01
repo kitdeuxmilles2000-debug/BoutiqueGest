@@ -1,6 +1,7 @@
 """Caisse : ouverture, mouvements, cloture et validation des sessions."""
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models.sales import (
@@ -20,7 +21,6 @@ from app.security.permissions import P
 from app.services import cash as cash_service
 from app.services import settings as settings_service
 from app.services.pagination import paginate
-from app.services.stock import dec
 
 cash_bp = Blueprint("cash", __name__, url_prefix="/caisse")
 
@@ -40,6 +40,9 @@ def _load_session(session_id):
 @login_required
 @permission_required(P.CASH_OPEN, mode="any")
 def index():
+    from app.services.seed import seed_registers
+
+    seed_registers()
     own = cash_service.find_open_session(vendeur_id=current_user.id)
     registers = cash_service.active_registers()
 
@@ -63,18 +66,32 @@ def index():
 @permission_required(P.CASH_OPEN)
 def open_session():
     register = cash_service.get_register(request.form.get("register_id", type=int))
-    solde = dec(request.form.get("solde_initial"))
+    try:
+        solde = cash_service.money_value(request.form.get("solde_initial") or "0", "Le fond initial")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("cash.index"))
     if register is None:
         flash("Selectionnez une caisse.", "danger")
         return redirect(url_for("cash.index"))
+    if not register.active:
+        flash("Cette caisse est inactive et ne peut pas etre ouverte.", "danger")
+        return redirect(url_for("cash.index"))
+    if solde < 0:
+        flash("Le fond initial ne peut pas etre negatif.", "danger")
+        return redirect(url_for("cash.index"))
     if cash_service.find_open_session(vendeur_id=current_user.id):
         flash("Vous avez deja une caisse ouverte.", "warning")
-        return redirect(url_for("cash.index"))
+        return redirect(url_for("pos.index") if request.form.get("next") == "pos" else url_for("cash.index"))
 
     try:
         session = cash_service.open_session(register, current_user.id, solde)
     except ValueError as exc:
         flash(str(exc), "danger")
+        return redirect(url_for("cash.index"))
+    except IntegrityError:
+        db.session.rollback()
+        flash("Cette caisse vient d'etre ouverte par un autre utilisateur. Choisissez une caisse disponible.", "warning")
         return redirect(url_for("cash.index"))
 
     log_action(
@@ -85,6 +102,8 @@ def open_session():
         commit=True,
     )
     flash(f"Caisse « {register.name} » ouverte.", "success")
+    if request.form.get("next") == "pos" and current_user.has_permission(P.SALES_CREATE):
+        return redirect(url_for("pos.index"))
     return redirect(url_for("cash.session_detail", session_id=session.id))
 
 
@@ -125,7 +144,11 @@ def add_movement(session_id):
         return redirect(url_for("cash.session_detail", session_id=session.id))
 
     kind = request.form.get("kind") or CashMovementKind.APPORT
-    amount = dec(request.form.get("amount"))
+    try:
+        amount = cash_service.money_value(request.form.get("amount"), "Le montant")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("cash.session_detail", session_id=session.id))
     reason = (request.form.get("reason") or "").strip()
     if kind not in (CashMovementKind.APPORT, CashMovementKind.RETRAIT):
         flash("Type de mouvement non autorise ici.", "danger")
@@ -159,7 +182,11 @@ def close_session(session_id):
         flash("Cette caisse n'est pas ouverte.", "warning")
         return redirect(url_for("cash.session_detail", session_id=session.id))
 
-    solde_compte = dec(request.form.get("solde_compte"))
+    try:
+        solde_compte = cash_service.money_value(request.form.get("solde_compte"), "Le montant compte")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("cash.session_detail", session_id=session.id))
     motif = (request.form.get("motif_ecart") or "").strip()
     theorique = session.compute_theorique()
     ecart = solde_compte - theorique

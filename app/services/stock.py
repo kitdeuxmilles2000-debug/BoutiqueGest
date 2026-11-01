@@ -23,7 +23,9 @@ def conversion_factor(product, unit_id):
     if unit_id is None or unit_id == product.base_unit_id:
         return Decimal("1")
     pu = ProductUnit.query.filter_by(product_id=product.id, unit_id=unit_id).first()
-    return pu.factor if pu else Decimal("1")
+    if pu is None:
+        raise ValueError("Cette unite n'est pas associee au produit selectionne.")
+    return pu.factor
 
 
 def to_base_quantity(product, unit_id, quantity):
@@ -106,6 +108,55 @@ def product_movements(product):
         .order_by(StockMovement.created_at.desc())
         .all()
     )
+
+
+def stock_financial_summary(products):
+    """Valorise le stock et estime sa marge brute par devise et produit."""
+    totals = {}
+    product_margins = {}
+    for product in products:
+        quantity = dec(product.stock_qty)
+        stock_value = dec(product.stock_value)
+        currency = product.currency
+        currency_totals = totals.setdefault(
+            currency,
+            {"stock_value": Decimal("0"), "potential_margin": Decimal("0"), "priced_products": 0},
+        )
+        currency_totals["stock_value"] += stock_value
+
+        sale_units = [
+            unit
+            for unit in product.selling_units
+            if (
+                unit.active
+                and unit.currency == currency
+                and dec(unit.factor) > 0
+                and dec(unit.prix_vente) > 0
+            )
+        ]
+        sale_unit = next((unit for unit in sale_units if unit.is_sale_default), None)
+        sale_unit = sale_unit or (sale_units[0] if sale_units else None)
+        if sale_unit is None:
+            product_margins[product.id] = None
+            continue
+
+        factor = dec(sale_unit.factor)
+        estimated_revenue = quantity * dec(sale_unit.prix_vente) / factor
+        potential_margin = estimated_revenue - stock_value
+        currency_totals["potential_margin"] += potential_margin
+        currency_totals["priced_products"] += 1
+        product_margins[product.id] = {
+            "unit_label": sale_unit.unit.label,
+            "unit_price": dec(sale_unit.prix_vente),
+            "margin": potential_margin,
+            "margin_percent": (
+                potential_margin * Decimal("100") / estimated_revenue
+                if estimated_revenue > 0
+                else None
+            ),
+        }
+
+    return totals, product_margins
 
 
 def apply_inventory_validation(session, user_id, reason=None):

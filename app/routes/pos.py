@@ -28,8 +28,14 @@ pos_bp = Blueprint("pos", __name__, url_prefix="/pos")
 def index():
     session = cash_service.find_open_session(vendeur_id=current_user.id)
     if session is None:
-        flash("Ouvrez d'abord une caisse pour vendre.", "warning")
-        return redirect(url_for("cash.index"))
+        from app.services.seed import seed_registers
+
+        seed_registers()
+        return render_template(
+            "pos/open_cash.html",
+            registers=cash_service.active_registers(),
+            can_open_cash=current_user.has_permission(P.CASH_OPEN),
+        )
 
     currency = session.currency
     catalog = []
@@ -69,30 +75,46 @@ def index():
 @permission_required(P.SALES_CREATE)
 def validate():
     session = cash_service.find_open_session(vendeur_id=current_user.id)
-    if session is None:
+    if session is None or not session.is_open or not session.register.active:
         flash("Aucune caisse ouverte pour encaisser.", "danger")
         return redirect(url_for("pos.index"))
 
     try:
-        payload = json.loads(request.form.get("payload") or "{}")
-    except ValueError:
-        payload = {}
+        payload = json.loads(request.form.get("payload") or "")
+    except (TypeError, ValueError):
+        flash("Le panier transmis est invalide. Vérifiez la vente et réessayez.", "danger")
+        return redirect(url_for("pos.index"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        flash("Le panier transmis est invalide. Vérifiez la vente et réessayez.", "danger")
+        return redirect(url_for("pos.index"))
 
     items = []
-    for raw in payload.get("items") or []:
-        product = db.session.get(Product, raw.get("product_id"))
+    for raw in payload["items"]:
+        if not isinstance(raw, dict):
+            flash("Une ligne du panier est invalide.", "danger")
+            return redirect(url_for("pos.index"))
+        product_id = raw.get("product_id")
+        unit_id = raw.get("unit_id")
+        try:
+            product_id = int(product_id)
+            unit_id = int(unit_id)
+        except (TypeError, ValueError):
+            flash("Un produit ou un format de vente du panier est invalide.", "danger")
+            return redirect(url_for("pos.index"))
+        product = db.session.get(Product, product_id)
         quantity = dec(raw.get("quantity"))
-        if product is None or quantity <= 0:
-            continue
+        if product is None or not product.active or quantity <= 0:
+            flash("Un produit du panier est introuvable, inactif ou a une quantité invalide.", "danger")
+            return redirect(url_for("pos.index"))
         items.append(
-            {"product": product, "unit_id": raw.get("unit_id"), "quantity": quantity}
+            {"product": product, "unit_id": unit_id, "quantity": quantity}
         )
 
     if not items:
         flash("Le panier est vide.", "danger")
         return redirect(url_for("pos.index"))
 
-    remise = dec(payload.get("remise")) if current_user.has_permission(P.SALES_DISCOUNT) else dec(0)
+    remise = payload.get("remise", "0") if current_user.has_permission(P.SALES_DISCOUNT) else "0"
     payments = payload.get("payments") or []
     notes = (payload.get("notes") or "").strip() or None
 

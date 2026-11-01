@@ -1,9 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Rapports{% endblock %}
 {% block heading %}Rapports{% endblock %}
-
 {% block content %}
+<div class="print-header" style="display:none">
+  <table style="width:100%">
+    <tr>
+      <td style="width:70px"><img src="{{ url_for('static', filename='img/logo.png') }}" style="height:55px" onerror="this.style.display='none'"></td>
+      <td style="text-align:center">
+        <div style="font-weight:bold;text-transform:uppercase">BOUTIQUEGEST</div>
+        <div>RAPPORT SYNTHETIQUE</div>
+        <div>Du {{ debut.strftime('%d/%m/%Y') }} au {{ fin.strftime('%d/%m/%Y') }} - {{ periode_labels[periode] }}</div>
+      </td>
+    </tr>
+  </table>
+  <hr style="border:1px solid #000;margin:6px 0 10px">
+</div>
+
+<div class="page-actions" style="margin-bottom:12px;display:flex;gap:10px;justify-content:flex-end">
+  <a class="btn" href="{{ url_for('reports.export_csv', periode=periode, debut=debut.strftime('%Y-%m-%d'), fin=fin.strftime('%Y-%m-%d')) }}">Exporter CSV</a>
+  <button class="btn primary" onclick="window.print()">Imprimer / PDF</button>
+</div>
 <style>
+  @media print {
+    .sidebar, .topbar, .page-actions, .periods, nav { display: none !important; }
+    body, .app, .content, main { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    .print-header { display: block !important; }
+    .card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ccc !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+  @page { size: A4; margin: 10mm; }
   .periods { display: flex; flex-wrap: wrap; gap: 6px; }
   .periods a { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; font-weight: 600; color: var(--ink); }
   .periods a.active { background: var(--primary); border-color: var(--primary); color: #fff; }
@@ -38,7 +63,14 @@
   <div class="card kpi">
     <span class="label">CA net · {{ cur }}</span>
     <span class="value accent">{{ v.ca | num }}</span>
-    <span class="foot">{{ v.count }} vente(s) · marge {{ v.marge | num }} {{ cur }}</span>
+    <span class="foot">{{ v.count }} vente(s) · marge brute {{ v.marge | num }} {{ cur }}{% if v.taux_marge is not none %} ({{ v.taux_marge | num }} % du CA){% endif %}</span>
+  </div>
+  {% endfor %}
+  {% for cur, achat in achats.items() %}
+  <div class="card kpi">
+    <span class="label">Achats reçus · {{ cur }}</span>
+    <span class="value">{{ achat.total | num }}</span>
+    <span class="foot">{{ achat.count }} achat(s) réceptionné(s) sur la période</span>
   </div>
   {% endfor %}
   {% for cur, r in resultat.items() %}
@@ -55,15 +87,32 @@
 
 <div class="grid cols-3">
   <div class="card">
+    <h2>Achats reçus par devise</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Nombre</th><th>Total reçu</th></tr></thead>
+        <tbody>
+          {% for cur, achat in achats.items() %}
+          <tr><td><span class="badge blue">{{ cur }}</span></td><td>{{ achat.count }}</td><td>{{ achat.total | num }}</td></tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">Aucun achat réceptionné sur la période.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="sub mt-16">Comptabilisés à la date de réception; devises séparées.</p>
+  </div>
+
+  <div class="card">
     <h2>Ventes par devise</h2>
     <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>Devise</th><th>Ventes</th><th>CA</th><th>Cout</th><th>Marge</th></tr></thead>
+        <thead><tr><th>Devise</th><th>Ventes</th><th>CA net</th><th>Coût marchandises</th><th>Marge brute</th><th>Marge % du CA</th></tr></thead>
         <tbody>
           {% for cur, v in ventes.items() %}
-          <tr><td><span class="badge blue">{{ cur }}</span></td><td>{{ v.count }}</td><td>{{ v.ca | num }}</td><td>{{ v.cout | num }}</td><td class="good">{{ v.marge | num }}</td></tr>
+          <tr><td><span class="badge blue">{{ cur }}</span></td><td>{{ v.count }}</td><td>{{ v.ca | num }}</td><td>{{ v.cout | num }}</td><td class="{{ 'good' if v.marge >= 0 else 'bad' }}">{{ v.marge | num }}</td><td>{% if v.taux_marge is not none %}{{ v.taux_marge | num }} %{% else %}—{% endif %}</td></tr>
           {% else %}
-          <tr><td colspan="5" class="muted">Aucune vente.</td></tr>
+          <tr><td colspan="6" class="muted">Aucune vente.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -136,17 +185,18 @@
     <h2>Top produits</h2>
     <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>Produit</th><th>Qte</th><th>CA</th><th>Marge</th></tr></thead>
+        <thead><tr><th>Produit</th><th>Qte</th><th>CA net</th><th>Marge brute</th><th>Marge % du CA</th></tr></thead>
         <tbody>
           {% for row in top %}
           <tr>
             <td>{{ row.product.name if row.product else '?' }}</td>
             <td>{{ row.qte | qty }}</td>
             <td>{{ row.ca | num }} {{ row.currency }}</td>
-            <td class="good">{{ row.marge | num }}</td>
+            <td class="{{ 'good' if row.marge >= 0 else 'bad' }}">{{ row.marge | num }}</td>
+            <td>{% if row.taux_marge is not none %}{{ row.taux_marge | num }} %{% else %}—{% endif %}</td>
           </tr>
           {% else %}
-          <tr><td colspan="4" class="muted">Aucune vente sur la periode.</td></tr>
+          <tr><td colspan="5" class="muted">Aucune vente sur la periode.</td></tr>
           {% endfor %}
         </tbody>
       </table>

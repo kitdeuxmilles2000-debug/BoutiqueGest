@@ -1,0 +1,1 @@
+"""BoutiqueGest automated tests."""

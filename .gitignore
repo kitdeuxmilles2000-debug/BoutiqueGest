@@ -22,6 +22,7 @@ instance/
 
 # Migrations de sauvegarde locales
 backups/
+PAQUET_MAJ_CLIENT*/
 
 # Logs
 *.log
@@ -33,9 +34,6 @@ logs/
 Thumbs.db
 desktop.ini
 
-# Autoriser les sauvegardes versionnées (history)
-!history/
-!history/*.db
-!history/*.sha256
-!history/*.json
+# Les sauvegardes de la boutique restent locales et ne sont jamais publiees.
+history/
 !history/README.md

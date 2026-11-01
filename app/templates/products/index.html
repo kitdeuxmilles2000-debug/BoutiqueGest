@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import show_pager %}
+{% from "_macros.html" import show_pager, table_action %}
 {% block title %}Produits{% endblock %}
 {% block heading %}Produits{% endblock %}
 
@@ -17,6 +17,7 @@
       {% endif %}
       <a href="{{ url_for('products.index', statut='attente') }}" class="btn {{ 'sm' if statut == 'attente' else 'ghost sm' }}">En attente de validation</a>
       {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
+      <a href="{{ url_for('products.proposer') }}" class="btn sm">Proposer un article</a>
       <a href="{{ url_for('products.new') }}" class="btn sm">+ Nouveau produit</a>
       {% endif %}
     </div>
@@ -99,11 +100,11 @@
             {% if not p.active %}<span class="badge gray">Inactif</span>{% endif %}
           </td>
           <td>
-            <div class="row" style="gap:6px; flex-wrap:wrap">
-              <a class="btn ghost sm" href="{{ url_for('products.detail', product_id=p.id) }}">Détail</a>
+            <div class="row" style="gap:4px; flex-wrap:nowrap">
+              {{ table_action(url_for('products.detail', product_id=p.id), 'view', 'Voir la fiche produit') }}
               {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
-              <a class="btn ghost sm" href="{{ url_for('products.edit', product_id=p.id) }}">Modifier</a>
-              <a class="btn danger sm" href="{{ url_for('products.delete', product_id=p.id) }}">Supprimer</a>
+              {{ table_action(url_for('products.edit', product_id=p.id), 'edit', 'Modifier le produit') }}
+              {{ table_action(url_for('products.delete', product_id=p.id), 'delete', 'Supprimer le produit', 'danger') }}
               {% endif %}
             </div>
           </td>

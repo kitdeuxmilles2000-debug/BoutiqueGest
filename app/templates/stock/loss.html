@@ -46,7 +46,7 @@ const PRODUCT_UNITS = {
   {% for p in products %}
   "{{ p.id }}": [
     {"id": {{ p.base_unit_id }}, "label": "{{ p.base_unit.label }} (base)"},
-    {% for pu in p.selling_units %}{% if pu.unit_id != p.base_unit_id %}{"id": {{ pu.unit_id }}, "label": "{{ pu.unit.label }}"},{% endif %}{% endfor %}
+    {% for pu in p.selling_units %}{% if pu.active and pu.unit_id != p.base_unit_id %}{"id": {{ pu.unit_id }}, "label": "{{ pu.unit.label }}"},{% endif %}{% endfor %}
   ],
   {% endfor %}
 };

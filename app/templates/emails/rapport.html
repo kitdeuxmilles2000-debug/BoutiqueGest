@@ -81,6 +81,31 @@
             </td>
           </tr>
 
+          <!-- Achats recus -->
+          <tr>
+            <td style="padding:26px 32px 0;">
+              <div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#64748b;font-weight:700;margin-bottom:10px;">
+                Achats reçus sur la période
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;overflow:hidden;">
+                <tr style="background:#f1f5f9;">
+                  <th align="left" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Devise</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Nombre d'achats</th>
+                  <th align="right" style="padding:10px 12px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Total reçu</th>
+                </tr>
+                {% for devise, achat in achats.items() %}
+                <tr>
+                  <td style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;">{{ devise }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;">{{ achat.count }}</td>
+                  <td align="right" style="padding:11px 12px;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">{{ amount(achat.total, devise) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" style="padding:16px 12px;font-size:13px;color:#64748b;">Aucun achat réceptionné sur la période.</td></tr>
+                {% endfor %}
+              </table>
+            </td>
+          </tr>
+
           <!-- Synthese par devise -->
           <tr>
             <td style="padding:26px 32px 0;">
