@@ -6,19 +6,29 @@
 <div class="card">
   <div class="card-head">
     <div>
+      {% if sqlite_database %}
       <h2>Sauvegardes locales</h2>
-      <p class="sub">Copie cohérente de la base SQLite (mode WAL), avec contrôle d'intégrité automatique. Retention : {{ retention or 30 }} versions.</p>
+      <p class="sub">Copie vérifiée chaque jour à 02:00 sur le PC boutique. Si le PC est éteint, la tâche s'exécute à son prochain démarrage. Rétention : {{ retention or 30 }} versions.</p>
+      {% else %}
+      <h2>Sauvegardes PostgreSQL Render</h2>
+      <p class="sub">Les sauvegardes de la base en ligne se gèrent depuis le tableau de bord Render. Cette page ne crée pas de copie PostgreSQL.</p>
+      {% endif %}
     </div>
+    {% if sqlite_database %}
     <div class="toolbar">
       <form method="post" action="{{ url_for('admin.backup_create') }}" style="margin:0">
-        <button class="btn sm">Créer une sauvegarde</button>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn sm">Créer une sauvegarde maintenant</button>
       </form>
       <form method="post" action="{{ url_for('admin.backup_purge') }}" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn ghost sm">Appliquer la rétention</button>
       </form>
     </div>
+    {% endif %}
   </div>
 
+  {% if sqlite_database %}
   <div class="table-wrap">
     <table class="table">
       <thead>
@@ -42,21 +52,30 @@
       </tbody>
     </table>
   </div>
+  {% else %}
+  <div class="card-body">
+    <p>Pour exporter ou gérer les sauvegardes, ouvrez la base PostgreSQL associée au service dans Render. Les sauvegardes automatiques et la restauration dépendent du forfait Render choisi.</p>
+    <p class="hint">La sauvegarde quotidienne installée sur le PC protège uniquement la base SQLite locale; elle ne sauvegarde pas PostgreSQL sur Render.</p>
+  </div>
+  {% endif %}
 </div>
 
+{% if sqlite_database %}
 <div class="card">
   <div class="card-head">
     <div>
-      <h2>Historique (points de restauration)</h2>
-      <p class="sub">Snapshots automatiques et manuels de la base. La restauration est protégée par le <strong>mot de passe propriétaire</strong>.</p>
+      <h2>Points de restauration manuels</h2>
+      <p class="sub">La restauration est protégée par le <strong>mot de passe propriétaire</strong>. La sauvegarde quotidienne figure dans la liste ci-dessus.</p>
     </div>
     <div class="toolbar">
       <form method="post" action="{{ url_for('admin.history_snapshot_create') }}" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="owner_password" id="owner_pw_snap">
         <button type="button" class="btn sm" onclick="askOwner('owner_pw_snap', this.form)">Créer un instantané</button>
       </form>
     </div>
   </div>
+  {% endif %}
 
   <div class="table-wrap">
     <table class="table">
@@ -72,6 +91,7 @@
           <td><a class="btn ghost sm" href="{{ url_for('admin.history_download', filename=s.filename) }}">Télécharger</a></td>
           <td>
             <form method="post" action="{{ url_for('admin.history_restore', filename=s.filename) }}" style="margin:0" onsubmit="return confirm('Restaurer cet instantané ? Action critique.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="owner_password" class="owner_pw_restore" required>
               <input type="text" name="reason" class="input" placeholder="Motif de restauration (obligatoire)" required style="min-width:200px">
               <button type="button" class="btn danger sm" onclick="fillOwnerAndSubmit(this.form)">Restaurer</button>

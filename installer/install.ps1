@@ -296,7 +296,19 @@ function Main {
         # Etape 6: Creer le raccourci bureau
         New-DesktopShortcut
 
-        # Etape 7: Verification
+        # Etape 7: Programmer la sauvegarde quotidienne
+        Write-Step "Programmation des sauvegardes quotidiennes"
+        $backupTaskScript = Join-Path $ScriptPath "Register-BackupTask.ps1"
+        if (Test-Path $backupTaskScript) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupTaskScript -ProjectRoot $ProjectRoot
+            if ($LASTEXITCODE -ne 0) {
+                throw "La programmation de la sauvegarde quotidienne a echoue."
+            }
+        } else {
+            throw "Script de programmation des sauvegardes introuvable : $backupTaskScript"
+        }
+
+        # Etape 8: Verification
         Write-Step "Verification finale"
         if (Test-Configuration) {
             Write-ColorOutput "

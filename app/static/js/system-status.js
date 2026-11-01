@@ -19,7 +19,7 @@
     }
   }
   setConn();
-  window.addEventListener('online', ()=>{setConn(); tryAutoBackup();});
+  window.addEventListener('online', setConn);
   window.addEventListener('offline', setConn);
 
   function show(msg, p){
@@ -47,31 +47,6 @@
     }catch(e){}
   }
 
-  let lastBackup = localStorage.getItem('bg_last_backup') || '';
-  async function tryAutoBackup(){
-    if(!navigator.onLine) return;
-    const now = new Date();
-    const today = now.toISOString().slice(0,10);
-    if(lastBackup === today) return;
-    try{
-      show('Sauvegarde automatique en cours...', 10);
-      const fd = new FormData();
-      // csrf si présent
-      const csrf = document.querySelector('input[name="csrf_token"]');
-      if(csrf) fd.append('csrf_token', csrf.value);
-      // tenter snapshot
-      const r = await fetch('/admin/sauvegardes/historique/creer-ajax', {method:'POST', body: fd});
-      if(r.ok){
-        show('Sauvegarde automatique terminée', 100);
-        localStorage.setItem('bg_last_backup', today);
-        setTimeout(hide, 2500);
-      }else{
-        hide();
-      }
-    }catch(e){ hide(); }
-  }
-
-  setTimeout(tryAutoBackup, 2000);
   setInterval(fetchStatus, 60000);
   window.BoutiqueGestSys = { show, hide };
 })();

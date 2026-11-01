@@ -115,15 +115,13 @@ def audit():
 @login_required
 @permission_required(P.BACKUP_MANAGE)
 def backups():
-    try:
-        db_history_service.create_snapshot(label="snapshot")
-    except Exception:
-        pass
+    sqlite_database = current_app.config.get("SQLALCHEMY_DATABASE_URI", "").startswith("sqlite:")
     return render_template(
         "admin/backups.html",
-        backups=backup_service.list_backups(),
-        retention=int(request.args.get("retention", 0)) or None,
-        snapshots=db_history_service.list_snapshots(),
+        backups=backup_service.list_backups() if sqlite_database else [],
+        retention=int(current_app.config.get("BACKUP_RETENTION", 30)),
+        snapshots=db_history_service.list_snapshots() if sqlite_database else [],
+        sqlite_database=sqlite_database,
     )
 
 
@@ -131,9 +129,13 @@ def backups():
 @login_required
 @permission_required(P.BACKUP_MANAGE)
 def backup_create():
+    if not current_app.config.get("SQLALCHEMY_DATABASE_URI", "").startswith("sqlite:"):
+        flash("Pour PostgreSQL, créez un export manuel depuis le tableau de bord Render.", "warning")
+        return redirect(url_for("admin.backups"))
     try:
         meta = backup_service.create_backup(label="manuel")
-    except RuntimeError as exc:
+        removed = backup_service.purge_old_backups()
+    except (OSError, RuntimeError) as exc:
         flash(str(exc), "danger")
         return redirect(url_for("admin.backups"))
 
@@ -144,7 +146,11 @@ def backup_create():
         commit=True,
     )
     if meta["valid"]:
-        flash(f"Sauvegarde « {meta['filename']} » creee et verifiee (integrite OK).", "success")
+        flash(
+            f"Sauvegarde « {meta['filename']} » créée et vérifiée "
+            f"(intégrité OK). Rétention : {removed} ancienne(s) copie(s) supprimée(s).",
+            "success",
+        )
     else:
         flash(f"Sauvegarde « {meta['filename']} » creee mais le controle d'integrite a echoue.", "danger")
     return redirect(url_for("admin.backups"))
@@ -154,17 +160,23 @@ def backup_create():
 @login_required
 @permission_required(P.BACKUP_MANAGE)
 def backup_download(filename):
-    path = os.path.join(backup_service.backup_dir(), filename)
-    if not os.path.exists(path):
+    backup = next(
+        (item for item in backup_service.list_backups() if item["filename"] == filename),
+        None,
+    )
+    if backup is None:
         flash("Sauvegarde introuvable.", "danger")
         return redirect(url_for("admin.backups"))
-    return send_file(path, as_attachment=True, download_name=filename)
+    return send_file(backup["path"], as_attachment=True, download_name=filename)
 
 
 @admin_bp.route("/sauvegardes/purger", methods=["POST"])
 @login_required
 @permission_required(P.BACKUP_MANAGE)
 def backup_purge():
+    if not current_app.config.get("SQLALCHEMY_DATABASE_URI", "").startswith("sqlite:"):
+        flash("La rétention automatique PostgreSQL est gérée par le service Render.", "warning")
+        return redirect(url_for("admin.backups"))
     removed = backup_service.purge_old_backups()
     log_action("backup_purge", entity="backup", after={"removed": removed}, commit=True)
     flash(f"Retention appliquee : {removed} ancienne(s) sauvegarde(s) supprimee(s).", "success")
@@ -176,6 +188,9 @@ def backup_purge():
 @owner_reauth_required()
 @owner_only()
 def history_snapshot_create():
+    if not current_app.config.get("SQLALCHEMY_DATABASE_URI", "").startswith("sqlite:"):
+        flash("Les instantanés SQLite sont disponibles uniquement sur le PC boutique.", "warning")
+        return redirect(url_for("admin.backups"))
     try:
         meta = db_history_service.create_snapshot(label="manuel")
         log_action("db_snapshot_create", entity="db_history", after=meta, commit=True)
@@ -184,18 +199,6 @@ def history_snapshot_create():
         db.session.rollback()
         flash(f"Erreur création instantané : {exc}", "danger")
     return redirect(url_for("admin.backups"))
-
-
-@admin_bp.route("/sauvegardes/historique/creer-ajax", methods=["POST"])
-@login_required
-def history_snapshot_create_ajax():
-    try:
-        meta = db_history_service.create_snapshot(label="auto")
-        log_action("db_snapshot_create_auto", entity="db_history", after=meta, commit=True)
-        return {"ok": True, "filename": meta["filename"]}, 200
-    except Exception as exc:
-        db.session.rollback()
-        return {"ok": False, "error": str(exc)}, 500
 
 
 @admin_bp.route("/sauvegardes/historique/<filename>/restaurer", methods=["POST"])

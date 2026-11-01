@@ -18,7 +18,7 @@ from app.extensions import db
 from app.models.base import utcnow
 
 BACKUP_DIR_NAME = "backups"
-BACKUP_RE = re.compile(r"^boutiquegest_(\d{8})_(\d{6})\.db$")
+BACKUP_RE = re.compile(r"^boutiquegest_(\d{8})_(\d{6})(?:_(\d+))?\.db$")
 
 
 def backup_dir():
@@ -64,17 +64,37 @@ def create_backup(label="manuel"):
 
     now = utcnow()
     filename = f"boutiquegest_{now:%Y%m%d}_{now:%H%M%S}.db"
-    dest = os.path.join(backup_dir(), filename)
+    directory = backup_dir()
+    dest = os.path.join(directory, filename)
+    suffix = 1
+    while os.path.exists(dest):
+        filename = f"boutiquegest_{now:%Y%m%d}_{now:%H%M%S}_{suffix:02d}.db"
+        dest = os.path.join(directory, filename)
+        suffix += 1
 
     # API de sauvegarde SQLite : copie coherente meme si la base est en WAL.
-    src_con = sqlite3.connect(src)
-    dest_con = sqlite3.connect(dest)
+    src_con = None
+    dest_con = None
     try:
+        src_con = sqlite3.connect(src)
+        dest_con = sqlite3.connect(dest)
         with dest_con:
             src_con.backup(dest_con)
+    except sqlite3.Error as exc:
+        if src_con is not None:
+            src_con.close()
+            src_con = None
+        if dest_con is not None:
+            dest_con.close()
+            dest_con = None
+        if os.path.exists(dest):
+            os.remove(dest)
+        raise RuntimeError(f"Erreur SQLite pendant la sauvegarde : {exc}") from exc
     finally:
-        src_con.close()
-        dest_con.close()
+        if src_con is not None:
+            src_con.close()
+        if dest_con is not None:
+            dest_con.close()
 
     ok = _integrity_ok(dest)
     return {
@@ -114,14 +134,15 @@ def purge_old_backups(keep=None):
     """Supprime les sauvegardes au-dela de la retention. Retourne le nombre supprime."""
     if keep is None:
         keep = int(current_app.config.get("BACKUP_RETENTION", 30))
+    keep = max(1, keep)
     backups = list_backups()
     removed = 0
     for old in backups[keep:]:
         try:
             os.remove(old["path"])
             removed += 1
-        except OSError:
-            pass
+        except OSError as exc:
+            raise OSError(f"Impossible de supprimer l'ancienne sauvegarde {old['filename']} : {exc}") from exc
     return removed
 
 

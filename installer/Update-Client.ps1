@@ -85,8 +85,14 @@ try {
         Write-Host "Aucune migration executee. Si l'application signale une mise a jour de base requise, relancez ce paquet et acceptez la migration apres verification de la sauvegarde." -ForegroundColor Yellow
     }
 
+    $backupTaskScript = Join-Path $ProjectRoot "installer\Register-BackupTask.ps1"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupTaskScript -ProjectRoot $ProjectRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "La mise a jour est appliquee, mais la sauvegarde automatique n'a pas ete programmee."
+    }
+
     Write-Host ""
-    Write-Host "Mise a jour terminee. Le raccourci du Bureau lance Waitress sans migrer la base au demarrage." -ForegroundColor Green
+    Write-Host "Mise a jour terminee. Waitress et la sauvegarde quotidienne sont configures." -ForegroundColor Green
 } catch {
     Write-Host "[ERREUR] $($_.Exception.Message)" -ForegroundColor Red
     exit 1

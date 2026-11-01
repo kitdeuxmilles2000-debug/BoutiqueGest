@@ -56,6 +56,22 @@ Render un plan PostgreSQL payant avec conservation des données, puis vérifiez 
 procédure de restauration sont disponibles. La base SQLite locale reste la référence et doit elle-même
 continuer à être sauvegardée.
 
+## Sauvegardes
+
+- **Sur le PC boutique (SQLite)** : l'installation crée une tâche Windows quotidienne à 02:00.
+  Elle utilise la commande `flask backup-db`, vérifie l'intégrité de la copie et conserve les
+  30 sauvegardes les plus récentes. Si l'ordinateur est éteint à l'heure prévue, la tâche est
+  configurée pour démarrer à la prochaine occasion. Les fichiers sont dans `backups/` à la racine
+  de l'installation; le journal de la tâche est `backups/automatic_backup.log`.
+- **Sauvegarde manuelle locale** : dans **Administration > Sauvegardes**, cliquer
+  **Créer une sauvegarde maintenant**. La copie apparaît dans la liste et peut être téléchargée.
+- **Points de restauration** : les instantanés manuels de l'historique restent disponibles depuis
+  cette même page. La restauration exige le mot de passe propriétaire et un motif.
+- **Sur Render (PostgreSQL)** : les sauvegardes locales du PC ne couvrent pas la base cloud. Utiliser
+  le tableau de bord Render pour exporter la base et vérifier les options de sauvegarde/restauration
+  incluses dans le forfait sélectionné. Ne pas compter sur le plan gratuit pour conserver les données
+  de la boutique.
+
 ## Utilisation et limites
 
 - Relancer **Synchroniser maintenant** après des changements locaux à publier. Le transfert actuel est

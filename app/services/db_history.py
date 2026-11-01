@@ -1,28 +1,46 @@
-"""Historique de la base de données (snapshots horodatés).
-
-Copie automatique de instance/boutiquegest.db vers history/ avec
-boutiquegest_YYYY-MM-DD_HH-MM-SS.db.
-Restauration protégée par mot de passe propriétaire + audit.
-"""
+"""Historique des points de restauration SQLite horodatés."""
 import os
-import shutil
+import re
+import sqlite3
 from datetime import datetime
 
 from flask import current_app
 
-from app.config import DEFAULT_DB_PATH, INSTANCE_DIR
+from app.extensions import db
 from app.models.base import utcnow
+
+SNAPSHOT_RE = re.compile(r"^boutiquegest_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:_[A-Za-z0-9_-]+)?\.db$")
 
 
 def history_dir():
-    base = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-    d = os.path.join(base, "history")
+    d = current_app.config.get("HISTORY_DIR")
+    if not d:
+        d = os.path.join(current_app.root_path, "..", "history")
+    d = os.path.abspath(d)
     os.makedirs(d, exist_ok=True)
     return d
 
 
 def db_path():
-    return DEFAULT_DB_PATH
+    uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if not uri.startswith("sqlite:"):
+        raise RuntimeError("Les points de restauration sont disponibles uniquement pour SQLite.")
+    path = uri.split("sqlite:///", 1)[-1]
+    if not path or path == ":memory:":
+        raise RuntimeError("Le chemin de la base SQLite est introuvable.")
+    return os.path.abspath(path)
+
+
+def _integrity_ok(path):
+    try:
+        connection = sqlite3.connect(path)
+        try:
+            row = connection.execute("PRAGMA integrity_check").fetchone()
+            return bool(row) and row[0] == "ok"
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        return False
 
 
 def create_snapshot(label="auto"):
@@ -36,15 +54,17 @@ def create_snapshot(label="auto"):
         if safe:
             name = f"boutiquegest_{stamp}_{safe}.db"
     dst = os.path.join(history_dir(), name)
-    shutil.copy2(src, dst)
-    # aussi créer un .sha256
+    src_connection = sqlite3.connect(src)
+    dst_connection = sqlite3.connect(dst)
     try:
-        import hashlib
-        h = hashlib.sha256(open(dst, "rb").read()).hexdigest()
-        with open(dst + ".sha256", "w", encoding="utf-8") as f:
-            f.write(h)
-    except Exception:
-        pass
+        with dst_connection:
+            src_connection.backup(dst_connection)
+    finally:
+        src_connection.close()
+        dst_connection.close()
+    if not _integrity_ok(dst):
+        os.remove(dst)
+        raise RuntimeError("Le point de restauration a échoué au contrôle d'intégrité.")
     return {"filename": name, "path": dst, "size": os.path.getsize(dst), "created_at": utcnow()}
 
 
@@ -69,14 +89,24 @@ def list_snapshots():
 
 def restore_snapshot(filename, reason=""):
     """Restaure depuis history/ vers la base active. Appeler APRÈS vérification propriétaire."""
-    if "/" in filename or "\\" in filename or ".." in filename:
+    if not SNAPSHOT_RE.fullmatch(filename):
         raise ValueError("Nom de fichier invalide.")
     src = os.path.join(history_dir(), filename)
     if not os.path.exists(src):
         raise ValueError("Snapshot introuvable.")
+    if not _integrity_ok(src):
+        raise RuntimeError("Point de restauration corrompu : restauration refusée.")
     dst = db_path()
     os.makedirs(os.path.dirname(dst), exist_ok=True)
-    # Sauvegarde de sécurité avant restauration
     pre = create_snapshot(label="pre-restore")
-    shutil.copy2(src, dst)
+    db.session.remove()
+    db.engine.dispose()
+    src_connection = sqlite3.connect(src)
+    dst_connection = sqlite3.connect(dst)
+    try:
+        with dst_connection:
+            src_connection.backup(dst_connection)
+    finally:
+        src_connection.close()
+        dst_connection.close()
     return {"restored_from": filename, "pre_restore": pre["filename"], "reason": reason}

@@ -68,7 +68,7 @@ set "FLASK_CONFIG=production"
 
 echo.
 echo [INFO] Sauvegarde et verification de la base de donnees...
-"%PYTHON_EXE%" -c "from run import app; from app.services.backup import create_backup; ctx=app.app_context(); ctx.push(); backup=create_backup('avant-migration'); print('Sauvegarde verifiee : %s' % backup['path']); raise SystemExit(0 if backup['valid'] else 1)"
+"%PYTHON_EXE%" -m flask --app run backup-db --label avant-migration
 if errorlevel 1 goto backup_error
 
 echo.
