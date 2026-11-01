@@ -35,5 +35,4 @@ Thumbs.db
 desktop.ini
 
 # Les sauvegardes de la boutique restent locales et ne sont jamais publiees.
-history/
-!history/README.md
+/history/
