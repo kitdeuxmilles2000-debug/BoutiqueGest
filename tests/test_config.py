@@ -11,13 +11,12 @@ class DatabaseConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "DATABASE_URL est obligatoire"):
                 _database_uri()
 
-    def test_production_rejects_sqlite_database_url(self):
+    def test_production_accepts_explicit_sqlite_database_url(self):
         with patch.dict(
             os.environ,
             {"FLASK_CONFIG": "prod", "DATABASE_URL": "sqlite:///local.db"},
         ):
-            with self.assertRaisesRegex(RuntimeError, "doit pointer vers PostgreSQL"):
-                _database_uri()
+            self.assertEqual(_database_uri(), "sqlite:///local.db")
 
 
 if __name__ == "__main__":

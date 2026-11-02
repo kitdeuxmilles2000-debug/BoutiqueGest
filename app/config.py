@@ -14,11 +14,9 @@ def _database_uri():
             return database_url.replace("postgres://", "postgresql+psycopg2://", 1)
         if database_url.startswith("postgresql://"):
             return database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-        if os.environ.get("FLASK_CONFIG") == "prod" and database_url.startswith("sqlite:"):
-            raise RuntimeError("DATABASE_URL doit pointer vers PostgreSQL en production.")
         return database_url
     if os.environ.get("FLASK_CONFIG") == "prod":
-        raise RuntimeError("DATABASE_URL est obligatoire en production; configurez la base PostgreSQL Render.")
+        raise RuntimeError("DATABASE_URL est obligatoire en production; configurez la base Render.")
     return "sqlite:///" + DEFAULT_DB_PATH.replace("\\", "/")
 
 
