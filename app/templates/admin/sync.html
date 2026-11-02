@@ -16,11 +16,13 @@
   </div>
   <div class="card kpi">
     <span class="label">Connexion</span>
-    <span class="value {{ 'good' if (stats.receiver_configured if cloud_read_only else stats.configured) else 'bad' }}">
-      {% if cloud_read_only %}
-        {{ 'Réception active' if stats.receiver_configured else 'Réception non configurée' }}
+    <span class="value {{ 'good' if (stats.configured or stats.receiver_configured) else 'bad' }}">
+      {% if stats.configured %}
+        Synchronisation configurée
+      {% elif stats.receiver_configured %}
+        Réception sécurisée active
       {% else %}
-        {{ 'Configurée' if stats.configured else 'Non configurée' }}
+        Non configurée
       {% endif %}
     </span>
     <span class="foot">Transfert authentifié par HTTPS</span>
@@ -30,15 +32,15 @@
 <div class="card">
   <div class="row between">
     <div>
-      <h2>Copie de la boutique locale vers Render</h2>
+      <h2>Synchronisation entre le PC et Render</h2>
       <p class="sub">
-        La base locale reste la référence. « Synchroniser maintenant » envoie un instantané
-        des produits, stocks, ventes, achats, clients, fournisseurs, caisse et finances.
-        Sur Render, les enregistrements sont fusionnés par UUID; aucune donnée Render absente
-        de la copie locale n'est supprimée.
+        Depuis le PC, « Synchroniser maintenant » récupère d’abord les changements du web,
+        fusionne les données par UUID, puis renvoie l’ensemble. Pour une même fiche, la version
+        ayant la date de modification la plus récente est conservée. Les suppressions ne sont
+        pas propagées.
       </p>
     </div>
-    {% if not cloud_read_only %}
+    {% if not cloud_read_only and config.get('SQLALCHEMY_DATABASE_URI', '').startswith('sqlite:') %}
     <form method="post" action="{{ url_for('admin.sync_process') }}" style="margin:0">
       <button class="btn" {% if not stats.configured %}disabled{% endif %}>Synchroniser maintenant</button>
     </form>

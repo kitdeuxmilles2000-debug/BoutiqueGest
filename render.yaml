@@ -17,7 +17,7 @@ services:
       - key: SYNC_API_TOKEN
         generateValue: true
       - key: CLOUD_READ_ONLY
-        value: "1"
+        value: "0"
       - key: SESSION_COOKIE_SECURE
         value: "1"
       - key: DATABASE_URL

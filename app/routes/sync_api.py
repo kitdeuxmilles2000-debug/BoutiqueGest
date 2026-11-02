@@ -4,20 +4,18 @@ import hmac
 import io
 import json
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import csrf, db
-from app.services.sync import SnapshotConflictError, apply_snapshot
+from app.services.sync import SnapshotConflictError, apply_snapshot, build_snapshot
 
 sync_api_bp = Blueprint("sync_api", __name__, url_prefix="/api/sync")
 MAX_COMPRESSED_BYTES = 25 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 
 
-@sync_api_bp.post("/snapshot")
-@csrf.exempt
-def receive_snapshot():
+def _authorization_error():
     expected_token = current_app.config.get("SYNC_API_TOKEN", "").strip()
     if not expected_token:
         return jsonify(ok=False, error="Réception de synchronisation non configurée."), 503
@@ -28,6 +26,44 @@ def receive_snapshot():
         supplied_token, expected_token
     ):
         return jsonify(ok=False, error="Authentification invalide."), 401
+    return None
+
+
+@sync_api_bp.get("/snapshot")
+@csrf.exempt
+def send_snapshot():
+    auth_error = _authorization_error()
+    if auth_error:
+        return auth_error
+
+    content = json.dumps(
+        {"ok": True, "snapshot": build_snapshot()},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    if len(content) > MAX_UNCOMPRESSED_BYTES:
+        return jsonify(ok=False, error="Instantané décompressé trop volumineux."), 413
+
+    compressed = gzip.compress(content)
+    if len(compressed) > MAX_COMPRESSED_BYTES:
+        return jsonify(ok=False, error="Instantané compressé trop volumineux."), 413
+    return Response(
+        compressed,
+        status=200,
+        headers={
+            "Content-Type": "application/json",
+            "Content-Encoding": "gzip",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@sync_api_bp.post("/snapshot")
+@csrf.exempt
+def receive_snapshot():
+    auth_error = _authorization_error()
+    if auth_error:
+        return auth_error
 
     if request.headers.get("Content-Encoding", "").lower() != "gzip":
         return jsonify(ok=False, error="Le contenu doit être compressé avec gzip."), 415

@@ -87,9 +87,19 @@ def find_duplicate_entry(product, quantity, unit_id, cost_unit, lot_number, *, d
 
 def next_entry_reference(day=None):
     day = day or date.today()
-    prefix = f"ENT-{day:%Y%m%d}"
-    count = StockEntryRequest.query.filter(StockEntryRequest.reference.like(prefix + "%")).count()
-    return f"{prefix}-{count + 1:04d}"
+    prefix = f"ENT-{day:%Y%m%d}-"
+    references = (
+        reference
+        for (reference,) in db.session.query(StockEntryRequest.reference).filter(
+            StockEntryRequest.reference.like(prefix + "%")
+        )
+    )
+    numbers = []
+    for reference in references:
+        suffix = reference[len(prefix) :]
+        if suffix.isdigit():
+            numbers.append(int(suffix))
+    return f"{prefix}{max(numbers, default=0) + 1:04d}"
 
 
 def create_entry_request(

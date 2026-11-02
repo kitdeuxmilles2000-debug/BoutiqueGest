@@ -157,6 +157,12 @@
           <span class="who">Connecté : <strong>{{ current_user.full_name }}</strong>
             <span class="badge blue">{{ current_user.role.label if current_user.role else '—' }}</span>
           </span>
+          {% if not cloud_read_only and current_user.has_permission(P.SYNC_MANAGE) and config.get('SQLALCHEMY_DATABASE_URI', '').startswith('sqlite:') %}
+          <form method="post" action="{{ url_for('admin.sync_process') }}" style="margin:0" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Synchronisation…';">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn ghost sm" title="Envoyer les données locales vers l’application web">🔁 Synchroniser</button>
+          </form>
+          {% endif %}
           <a href="{{ url_for('auth.change_password') }}" class="btn ghost sm">Mot de passe</a>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

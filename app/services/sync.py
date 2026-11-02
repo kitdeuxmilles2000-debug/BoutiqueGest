@@ -1,4 +1,6 @@
-"""Synchronisation unidirectionnelle de la base locale vers Render."""
+"""Synchronisation bidirectionnelle déclenchée depuis la boutique locale."""
+import gzip
+import io
 import json
 import secrets
 import urllib.error
@@ -208,12 +210,13 @@ def _mapped_foreign_value(column, source_value, user_ids, id_maps):
 
 
 def apply_snapshot(snapshot):
-    """Fusionne atomiquement les enregistrements par UUID sans supprimer Render."""
+    """Fusionne par UUID; la version avec updated_at le plus récent est conservée."""
     models = _models_by_table()
     _validate_snapshot(snapshot, models)
 
     user_ids = _source_user_map(snapshot["users"])
     id_maps = {"users": user_ids}
+    stale_rows = {}
     counts = {}
 
     try:
@@ -221,6 +224,7 @@ def apply_snapshot(snapshot):
             model = models[table_name]
             rows = snapshot["tables"][table_name]
             id_maps[table_name] = {}
+            stale_rows[table_name] = set()
             existing = {}
             for start in range(0, len(rows), 500):
                 uuids = [item["uuid"] for item in rows[start : start + 500]]
@@ -249,6 +253,20 @@ def apply_snapshot(snapshot):
                         record = model()
                         record.uuid = row["uuid"]
                         db.session.add(record)
+                        is_new = True
+                    else:
+                        is_new = False
+                else:
+                    is_new = False
+
+                if not is_new and record.updated_at and row.get("updated_at"):
+                    incoming_updated_at = _convert_value(
+                        model.__table__.columns["updated_at"], row["updated_at"]
+                    )
+                    if record.updated_at > incoming_updated_at:
+                        id_maps[table_name][row["id"]] = record.id
+                        stale_rows[table_name].add(row["id"])
+                        continue
 
                 id_maps[table_name][row["id"]] = record.id
                 for column in model.__table__.columns:
@@ -272,6 +290,8 @@ def apply_snapshot(snapshot):
         for table_name, model in models.items():
             row_by_id = {row["id"]: row for row in snapshot["tables"][table_name]}
             for source_id, target_id in id_maps[table_name].items():
+                if source_id in stale_rows[table_name]:
+                    continue
                 record = db.session.get(model, target_id)
                 source = row_by_id[source_id]
                 for column in model.__table__.columns:
@@ -345,20 +365,71 @@ def _sender():
     return send
 
 
+def _fetch_remote_snapshot():
+    url = current_app.config.get("SYNC_REMOTE_URL", "").strip()
+    token = current_app.config.get("SYNC_API_TOKEN", "").strip()
+    if not current_app.config.get("SYNC_ENABLED") or not url or not token:
+        return None
+    if not url.startswith("https://"):
+        raise ValueError("L'URL de synchronisation doit utiliser HTTPS.")
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip",
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            if response.status != 200:
+                raise RuntimeError("Render n'a pas fourni l'instantané distant.")
+            if response.headers.get("Content-Encoding", "").lower() != "gzip":
+                raise RuntimeError("L'instantané distant n'est pas compressé avec gzip.")
+            compressed = response.read(25 * 1024 * 1024 + 1)
+            if len(compressed) > 25 * 1024 * 1024:
+                raise RuntimeError("Instantané distant compressé trop volumineux.")
+            with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as stream:
+                content = stream.read(100 * 1024 * 1024 + 1)
+            if len(content) > 100 * 1024 * 1024:
+                raise RuntimeError("Instantané distant décompressé trop volumineux.")
+            result = json.loads(content.decode("utf-8"))
+            if (
+                not isinstance(result, dict)
+                or not result.get("ok")
+                or not isinstance(result.get("snapshot"), dict)
+            ):
+                raise RuntimeError("Render n'a pas confirmé l'instantané distant.")
+            return result["snapshot"]
+    except urllib.error.HTTPError as exc:
+        details = exc.read(4096).decode("utf-8", errors="replace")
+        try:
+            message = json.loads(details).get("error", details)
+        except json.JSONDecodeError:
+            message = details
+        raise RuntimeError(f"Réponse Render {exc.code} : {message}") from exc
+
+
 def sync_now():
-    """Envoie un instantané complet; les événements historiques restent locaux."""
+    """Récupère Render, fusionne les données, puis renvoie l'ensemble fusionné."""
     try:
         sender = _sender()
         if sender is None:
             return {"ok": False, "configured": False, "error": "Synchronisation distante non configurée."}
 
+        remote_snapshot = _fetch_remote_snapshot()
+        if remote_snapshot is None:
+            return {"ok": False, "configured": False, "error": "Synchronisation distante non configurée."}
+        apply_snapshot(remote_snapshot)
         result = sender(build_snapshot())
         set_setting("sync.last_snapshot_at", utcnow().isoformat())
         set_setting("sync.last_error", "")
         set_setting("sync.last_total", str(result.get("received", {}).get("total", 0)))
         db.session.commit()
         return {"ok": True, "configured": True, "result": result}
-    except (OSError, RuntimeError, ValueError, urllib.error.URLError) as exc:
+    except (OSError, RuntimeError, ValueError, SnapshotConflictError, urllib.error.URLError) as exc:
         db.session.rollback()
         set_setting("sync.last_error", str(exc)[:500])
         db.session.commit()
