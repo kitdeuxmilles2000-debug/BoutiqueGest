@@ -17,7 +17,19 @@ services:
       - key: SYNC_API_TOKEN
         generateValue: true
       - key: CLOUD_READ_ONLY
+        value: "0"
+      - key: GITHUB_SYNC_ENABLED
         value: "1"
+      - key: GITHUB_SYNC_REPOSITORY
+        sync: false
+      - key: GITHUB_SYNC_TOKEN
+        sync: false
+      - key: GITHUB_SYNC_BRANCH
+        value: boutiquegest-data
+      - key: GITHUB_SYNC_PATH
+        value: sync/boutiquegest-snapshot.json.gz
+      - key: GITHUB_SYNC_POLL_SECONDS
+        value: "30"
       - key: SESSION_COOKIE_SECURE
         value: "1"
       - key: DATABASE_URL
@@ -26,4 +38,3 @@ services:
         value: Africa/Kinshasa
       - key: PYTHONUNBUFFERED
         value: "1"
-

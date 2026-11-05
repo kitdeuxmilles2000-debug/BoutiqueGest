@@ -7,10 +7,10 @@
   <div class="card kpi">
     <span class="label">Dernière synchronisation réussie</span>
     <span class="value">{{ stats.last_snapshot_at.strftime('%d/%m/%Y %H:%M') if stats.last_snapshot_at else '—' }}</span>
-    <span class="foot">Instantané local confirmé par Render</span>
+    <span class="foot">Instantané métier confirmé par {{ stats.transport }}</span>
   </div>
   <div class="card kpi">
-    <span class="label">Enregistrements transmis</span>
+    <span class="label">Enregistrements synchronisés</span>
     <span class="value accent">{{ stats.last_total }}</span>
     <span class="foot">Lors du dernier transfert réussi</span>
   </div>
@@ -19,7 +19,7 @@
     <span class="value {{ 'good' if (stats.configured or stats.receiver_configured) else 'bad' }}">
       {% if stats.configured %}
         Synchronisation configurée
-      {% elif stats.receiver_configured %}
+      {% elif stats.receiver_configured and not config.get('GITHUB_SYNC_ENABLED') %}
         Réception sécurisée active
       {% else %}
         Non configurée
@@ -32,12 +32,11 @@
 <div class="card">
   <div class="row between">
     <div>
-      <h2>Synchronisation entre le PC et Render</h2>
+      <h2>Synchronisation entre le PC, GitHub et Render</h2>
       <p class="sub">
-        Depuis le PC, « Synchroniser maintenant » récupère d’abord les changements du web,
-        fusionne les données par UUID, puis renvoie l’ensemble. Pour une même fiche, la version
-        ayant la date de modification la plus récente est conservée. Les suppressions ne sont
-        pas propagées.
+        Les données métier sont fusionnées par UUID. Le PC et Render récupèrent les changements
+        publiés sur GitHub; chaque écriture réussie les republie automatiquement. Pour une même
+        fiche, la version ayant la date de modification la plus récente est conservée.
       </p>
     </div>
     {% if not cloud_read_only and config.get('SQLALCHEMY_DATABASE_URI', '').startswith('sqlite:') %}
@@ -53,6 +52,14 @@
 
   {% if cloud_read_only %}
   <p class="hint mt-16">Cette instance Render est en lecture seule. La synchronisation se lance depuis l'application du PC boutique.</p>
+  {% elif not stats.configured and config.get('GITHUB_SYNC_ENABLED') %}
+  <p class="hint mt-16">
+    Configurez sur le PC et dans les variables d’environnement Render
+    <code>GITHUB_SYNC_ENABLED=1</code>, <code>GITHUB_SYNC_REPOSITORY</code>,
+    <code>GITHUB_SYNC_BRANCH=boutiquegest-data</code>, <code>GITHUB_SYNC_PATH</code> et
+    <code>GITHUB_SYNC_TOKEN</code>. Le jeton GitHub doit avoir l’accès Contents en lecture/écriture.
+    Ne le placez jamais dans le dépôt.
+  </p>
   {% elif not stats.configured %}
   <p class="hint mt-16">
     Configurez sur le PC local <code>SYNC_ENABLED=1</code>,
@@ -61,7 +68,7 @@
   </p>
   {% else %}
   <p class="hint mt-16">
-    Les collisions de codes/références avec des enregistrements différents sur Render annulent
+    Les collisions de codes/références avec des enregistrements différents annulent
     l'import et sont signalées. Les comptes locaux sont représentés par des comptes miroir
     désactivés; leurs mots de passe et codes PIN ne sont jamais exportés.
   </p>

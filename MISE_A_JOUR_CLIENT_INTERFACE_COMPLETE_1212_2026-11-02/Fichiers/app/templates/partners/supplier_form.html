@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Modifier fournisseur{% endblock %}
+{% block heading %}Modifier · {{ supplier.name }}{% endblock %}
+
+{% block content %}
+<div class="card form-narrow">
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field"><label for="name">Nom</label><input type="text" id="name" name="name" value="{{ supplier.name }}" required></div>
+    <div class="field"><label for="contact">Contact</label><input type="text" id="contact" name="contact" value="{{ supplier.contact or '' }}"></div>
+    <div class="field">
+      <label for="default_currency">Devise usuelle</label>
+      <select id="default_currency" name="default_currency">{% for cur in currencies %}<option value="{{ cur }}" {{ 'selected' if supplier.default_currency == cur }}>{{ cur }}</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="terms">Conditions</label><input type="text" id="terms" name="terms" value="{{ supplier.terms or '' }}"></div>
+    <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" rows="2">{{ supplier.notes or '' }}</textarea></div>
+    <label class="row" style="gap:6px;margin-bottom:14px"><input type="checkbox" name="active" {{ 'checked' if supplier.active }}> Actif</label>
+    <div class="row"><button class="btn" type="submit">Enregistrer</button><a href="{{ url_for('partners.suppliers') }}" class="btn ghost">Annuler</a></div>
+  </form>
+</div>
+{% endblock %}

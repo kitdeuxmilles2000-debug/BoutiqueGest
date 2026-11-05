@@ -449,15 +449,24 @@ def stats():
     except (TypeError, ValueError):
         last_total = 0
 
-    configured = bool(
+    github_configured = bool(
+        current_app.config.get("GITHUB_SYNC_ENABLED")
+        and current_app.config.get("GITHUB_SYNC_REPOSITORY")
+        and current_app.config.get("GITHUB_SYNC_TOKEN")
+    )
+    legacy_configured = bool(
         current_app.config.get("SYNC_ENABLED")
         and current_app.config.get("SYNC_REMOTE_URL")
         and current_app.config.get("SYNC_API_TOKEN")
     )
     return {
-        "configured": configured,
-        "receiver_configured": bool(current_app.config.get("SYNC_API_TOKEN")),
+        "configured": github_configured or legacy_configured,
+        "transport": "GitHub" if current_app.config.get("GITHUB_SYNC_ENABLED") else "Render",
+        "receiver_configured": bool(
+            not current_app.config.get("GITHUB_SYNC_ENABLED")
+            and current_app.config.get("SYNC_API_TOKEN")
+        ),
         "last_snapshot_at": last_snapshot,
-        "last_error": last_error,
+        "last_error": current_app.extensions.get("github_sync_error") or last_error,
         "last_total": last_total,
     }

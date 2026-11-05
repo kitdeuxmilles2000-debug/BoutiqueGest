@@ -23,6 +23,10 @@ def create_app(config_name=None):
     _register_errors(app)
     _register_read_only_mode(app)
 
+    from app.services.github_sync import register_automatic_sync
+
+    register_automatic_sync(app)
+
     from app.cli import register_cli
 
     register_cli(app)
@@ -121,6 +125,8 @@ def _register_context(app):
             "NOTIFICATION_TYPE_LABELS": NOTIFICATION_TYPE_LABELS,
             "NOTIFICATION_TYPE_BADGES": NOTIFICATION_TYPE_BADGES,
             "cloud_read_only": app.config.get("CLOUD_READ_ONLY", False),
+            "github_sync_enabled": app.config.get("GITHUB_SYNC_ENABLED", False),
+            "github_sync_error": app.extensions.get("github_sync_error", ""),
             "is_owner": lambda: is_owner(current_user),
             "now_date": date.today(),
         }

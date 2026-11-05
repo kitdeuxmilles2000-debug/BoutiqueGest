@@ -248,13 +248,18 @@ def sync():
 @login_required
 @permission_required(P.SYNC_MANAGE)
 def sync_process():
-    bilan = sync_service.sync_now()
+    if current_app.config.get("GITHUB_SYNC_ENABLED"):
+        from app.services import github_sync
+
+        bilan = github_sync.sync_now()
+    else:
+        bilan = sync_service.sync_now()
     log_action("sync_snapshot", entity="sync", after=bilan, commit=True)
     if not bilan["ok"]:
         flash(f"Synchronisation impossible : {bilan['error']}", "danger")
     else:
         total = bilan["result"]["received"]["total"]
-        flash(f"Synchronisation terminée : {total} enregistrement(s) transmis.", "success")
+        flash(f"Synchronisation terminée : {total} enregistrement(s) synchronisé(s).", "success")
     return redirect(url_for("admin.sync"))
 
 

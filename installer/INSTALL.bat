@@ -17,10 +17,11 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo [INFO] Verification des droits administrateur...
-powershell -Command "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"%~dp0install.ps1\"'"
+echo [INFO] Lancement de l'installation...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1"
+set "INSTALL_EXIT_CODE=%ERRORLEVEL%"
 
-if %ERRORLEVEL% EQU 0 (
+if "%INSTALL_EXIT_CODE%" EQU "0" (
     echo.
     echo ====================================================================
     echo           INSTALLATION TERMINEE

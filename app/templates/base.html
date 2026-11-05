@@ -30,7 +30,7 @@
         <span class="ico">📊</span> Stock
       </a>
       <a href="{{ url_for('stock.valuation') }}" class="{{ 'active' if request.endpoint == 'stock.valuation' }}">
-        <span class="ico">??</span> Valorisation du stock
+        <span class="ico">💰</span> Valorisation du stock
       </a>
       <a href="{{ url_for('stock.movements') }}" class="{{ 'active' if request.endpoint == 'stock.movements' }}">
         <span class="ico">🔄</span> Mouvements
@@ -163,8 +163,11 @@
           {% if not cloud_read_only and current_user.has_permission(P.SYNC_MANAGE) and config.get('SQLALCHEMY_DATABASE_URI', '').startswith('sqlite:') %}
           <form method="post" action="{{ url_for('admin.sync_process') }}" style="margin:0" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Synchronisation…';">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn ghost sm" title="Envoyer les données locales vers l’application web">🔁 Synchroniser</button>
+            <button type="submit" class="btn ghost sm" title="{% if github_sync_enabled %}Synchroniser les données métier avec GitHub et Render{% else %}Envoyer les données locales vers l’application web{% endif %}">🔁 Synchroniser{% if github_sync_enabled %} GitHub{% endif %}</button>
           </form>
+          {% endif %}
+          {% if github_sync_enabled and github_sync_error %}
+          <span class="badge rouge" title="{{ github_sync_error }}">GitHub : synchronisation en erreur</span>
           {% endif %}
           <a href="{{ url_for('auth.change_password') }}" class="btn ghost sm">Mot de passe</a>
           <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0">
@@ -211,6 +214,7 @@
     });
   })();
 </script>
+<script src="{{ url_for('static', filename='js/form-recovery.js') }}"></script>
 <script src="{{ url_for('static', filename='js/system-status.js') }}"></script>
 <div id="notifBox" class="notif-box" style="position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9999"></div>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/notifications.css') }}">

@@ -1,0 +1,29 @@
+MISE A JOUR BOUTIQUEGEST - 05/11/2026
+
+CONTENU
+Cette mise a jour ajoute :
+- l'affichage du code produit dans le panier du point de vente et sur le recu ;
+- le rapport detaille de valorisation du stock, au cout moyen d'achat et au prix
+  de vente actuel ;
+- les conversions CDF/USD du stock et des ventes journalieres avec le taux
+  courant deja saisi dans Administration > Taux de change ;
+- l'export CSV des chiffres d'affaires journaliers convertis.
+
+INSTALLATION CHEZ LE CLIENT
+1. Faites une sauvegarde des fichiers de l'application du client.
+2. Copiez le contenu du dossier Fichiers dans le dossier principal de
+   BoutiqueGest, en conservant les sous-dossiers app\...
+3. Si un fichier du client contient des personnalisations, ne le remplacez pas
+   aveuglement : comparez-le et reportez les changements de cette mise a jour.
+4. Redemarrez l'application.
+5. Le taux de conversion est le taux USD -> CDF existant. Il se gere dans
+   Administration > Taux de change. Sans taux, aucun equivalent converti n'est
+   affiche et les montants restent separes par devise.
+
+BASE DE DONNEES
+Aucun fichier de base de donnees n'est fourni ni a remplacer.
+Aucune table ou colonne n'a ete ajoutee : aucune migration n'est necessaire.
+Ne copiez pas la base locale du projet chez le client.
+
+Le dossier Fichiers contient uniquement les fichiers applicatifs necessaires.
+Les tests de developpement ne sont pas inclus dans le paquet client.

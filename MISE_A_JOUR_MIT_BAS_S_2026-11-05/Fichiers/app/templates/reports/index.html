@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Rapports{% endblock %}
+{% block heading %}Rapports{% endblock %}
+{% block content %}
+<div class="print-header" style="display:none">
+  <table style="width:100%">
+    <tr>
+      <td style="width:70px"><img src="{{ url_for('static', filename='img/logo.png') }}" style="height:55px" onerror="this.style.display='none'"></td>
+      <td style="text-align:center">
+        <div style="font-weight:bold;text-transform:uppercase">BOUTIQUEGEST</div>
+        <div>RAPPORT SYNTHETIQUE</div>
+        <div>Du {{ debut.strftime('%d/%m/%Y') }} au {{ fin.strftime('%d/%m/%Y') }} - {{ periode_labels[periode] }}</div>
+      </td>
+    </tr>
+  </table>
+  <hr style="border:1px solid #000;margin:6px 0 10px">
+</div>
+
+<div class="page-actions" style="margin-bottom:12px;display:flex;gap:10px;justify-content:flex-end">
+  <a class="btn" href="{{ url_for('reports.export_csv', periode=periode, debut=debut.strftime('%Y-%m-%d'), fin=fin.strftime('%Y-%m-%d')) }}">Exporter CSV</a>
+  <button class="btn primary" onclick="window.print()">Imprimer / PDF</button>
+</div>
+<style>
+  @media print {
+    .sidebar, .topbar, .page-actions, .periods, nav { display: none !important; }
+    body, .app, .content, main { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    .print-header { display: block !important; }
+    .card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ccc !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+  @page { size: A4; margin: 10mm; }
+  .periods { display: flex; flex-wrap: wrap; gap: 6px; }
+  .periods a { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; font-weight: 600; color: var(--ink); }
+  .periods a.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .bar { height: 10px; border-radius: 6px; background: var(--primary-050); overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--primary-600); }
+  .mini { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+  .mini .lbl { width: 90px; font-size: .82rem; color: var(--muted); }
+  .mini .val { font-weight: 700; font-size: .84rem; }
+  @media print { .sidebar, .topbar, .no-print, .periods { display: none !important; } }
+</style>
+
+<div class="card no-print">
+  <div class="row between">
+    <div class="periods">
+      {% for code, label in periode_labels.items() %}
+      <a href="{{ url_for('reports.index', periode=code) }}" class="{{ 'active' if periode == code }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="row">
+      {% if current_user.has_permission(P.REPORTS_EXPORT) %}
+      <a href="{{ url_for('reports.export_csv', periode=periode) }}" class="btn">Export Excel (CSV)</a>
+      {% endif %}
+      <button class="btn ghost" onclick="window.print()">Imprimer / PDF</button>
+    </div>
+  </div>
+  <p class="sub mt-16">Periode : du {{ debut.strftime('%d/%m/%Y') }} au {{ (fin).strftime('%d/%m/%Y') }}.
+    Les ventes d'origine restent séparées par devise. Les équivalents CDF/USD sont indicatifs et calculés au taux courant.
+    {% if rate %}Taux utilisé : 1 USD = {{ rate.rate }} CDF ({{ rate.effective_date.strftime('%d/%m/%Y') }}).
+    {% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.exchange_rate') }}">Saisir un taux de change</a> pour afficher les conversions.
+    {% else %}Les conversions seront affichées lorsqu'un taux de change aura été renseigné.{% endif %}
+  </p>
+</div>
+
+<div class="grid cols-4">
+  {% for cur, v in ventes.items() %}
+  <div class="card kpi">
+    <span class="label">CA net · {{ cur }}</span>
+    <span class="value accent">{{ v.ca | num }}</span>
+    <span class="foot">{{ v.count }} vente(s) · marge brute {{ v.marge | num }} {{ cur }}{% if v.taux_marge is not none %} ({{ v.taux_marge | num }} % du CA){% endif %}</span>
+  </div>
+  {% endfor %}
+  {% for cur, achat in achats.items() %}
+  <div class="card kpi">
+    <span class="label">Achats reçus · {{ cur }}</span>
+    <span class="value">{{ achat.total | num }}</span>
+    <span class="foot">{{ achat.count }} achat(s) réceptionné(s) sur la période</span>
+  </div>
+  {% endfor %}
+  {% for cur, r in resultat.items() %}
+  <div class="card kpi">
+    <span class="label">Resultat estime · {{ cur }}</span>
+    <span class="value {{ 'good' if r.resultat >= 0 else 'bad' }}">{{ r.resultat | num }}</span>
+    <span class="foot">marge {{ r.marge | num }} − charges {{ r.charges | num }}</span>
+  </div>
+  {% endfor %}
+  {% if not ventes and not resultat %}
+  <div class="card kpi"><span class="label">Aucune activite</span><span class="value muted">—</span><span class="foot">Sur la periode choisie</span></div>
+  {% endif %}
+</div>
+
+{% if sales_currency_summary.totals %}
+<div class="grid cols-2">
+  {% for currency, amount in sales_currency_summary.totals.items() %}
+  <div class="card kpi">
+    <span class="label">Chiffre d'affaires converti · {{ currency }}</span>
+    <span class="value accent">{{ amount | num }} {{ currency }}</span>
+    <span class="foot">Ventes CDF et USD converties au taux courant</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if sales_currency_summary.unconverted_currencies %}
+<div class="card"><p class="sub">Les ventes en {{ sales_currency_summary.unconverted_currencies | join(', ') }} ne sont pas incluses dans les conversions CDF/USD.</p></div>
+{% endif %}
+
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Achats reçus par devise</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Nombre</th><th>Total reçu</th></tr></thead>
+        <tbody>
+          {% for cur, achat in achats.items() %}
+          <tr><td><span class="badge blue">{{ cur }}</span></td><td>{{ achat.count }}</td><td>{{ achat.total | num }}</td></tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">Aucun achat réceptionné sur la période.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="sub mt-16">Comptabilisés à la date de réception; devises séparées.</p>
+  </div>
+
+  <div class="card">
+    <h2>Ventes par devise</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Ventes</th><th>CA net</th><th>Coût marchandises</th><th>Marge brute</th><th>Marge % du CA</th></tr></thead>
+        <tbody>
+          {% for cur, v in ventes.items() %}
+          <tr><td><span class="badge blue">{{ cur }}</span></td><td>{{ v.count }}</td><td>{{ v.ca | num }}</td><td>{{ v.cout | num }}</td><td class="{{ 'good' if v.marge >= 0 else 'bad' }}">{{ v.marge | num }}</td><td>{% if v.taux_marge is not none %}{{ v.taux_marge | num }} %{% else %}—{% endif %}</td></tr>
+          {% else %}
+          <tr><td colspan="6" class="muted">Aucune vente.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Charges (depenses validees)</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Total charges</th></tr></thead>
+        <tbody>
+          {% for cur, total in charges.items() %}
+          <tr><td><span class="badge amber">{{ cur }}</span></td><td>{{ total | num }}</td></tr>
+          {% else %}
+          <tr><td colspan="2" class="muted">Aucune charge validee.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="sub mt-16">{{ expenses | length }} depense(s) validee(s).</p>
+  </div>
+
+  <div class="card">
+    <h2>Creances &amp; dettes en cours</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Devise</th><th>Creances clients</th><th>Dettes fourn.</th></tr></thead>
+        <tbody>
+          {% for cur, v in creances.items() %}
+          <tr><td><span class="badge blue">{{ cur }}</span></td><td class="good">{{ v.client | num }}</td><td style="color:var(--danger)">{{ v.fournisseur | num }}</td></tr>
+          {% else %}
+          <tr><td colspan="3" class="muted">Aucun encours.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="grid cols-3">
+  <div class="card">
+    <h2>Tresorerie (mouvements de caisse)</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Nature</th><th>Devise</th><th>Montant</th></tr></thead>
+        <tbody>
+          {% for kind, par_dev in tresorerie_nature.items() %}
+            {% for cur, amount in par_dev.items() %}
+            <tr>
+              <td>{{ movement_labels.get(kind, kind) }}</td>
+              <td><span class="pill">{{ cur }}</span></td>
+              <td style="font-weight:700;color:{{ 'var(--success)' if amount >= 0 else 'var(--danger)' }}">{{ '+' if amount >= 0 }}{{ amount | num }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr><td colspan="3" class="muted">Aucun mouvement.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-16">
+      {% for cur, total in tresorerie_devise.items() %}
+      <div class="mini"><span class="lbl">Net {{ cur }}</span><span class="val {{ 'good' if total >= 0 else 'bad' }}">{{ total | num }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Top produits</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Produit</th><th>Qte</th><th>CA net</th><th>Marge brute</th><th>Marge % du CA</th></tr></thead>
+        <tbody>
+          {% for row in top %}
+          <tr>
+            <td>{{ row.product.name if row.product else '?' }}</td>
+            <td>{{ row.qte | qty }}</td>
+            <td>{{ row.ca | num }} {{ row.currency }}</td>
+            <td class="{{ 'good' if row.marge >= 0 else 'bad' }}">{{ row.marge | num }}</td>
+            <td>{% if row.taux_marge is not none %}{{ row.taux_marge | num }} %{% else %}—{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">Aucune vente sur la periode.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ventes par jour en CDF</h2>
+    {% set daily_cdf = sales_currency_summary.daily | map(attribute='CDF') | list %}
+    {% set max_cdf = daily_cdf | max if daily_cdf else 0 %}
+    {% for row in sales_currency_summary.daily %}
+      <div class="mini">
+        <span class="lbl">{{ row.date.strftime('%d/%m') }}</span>
+        <span class="bar" style="flex:1"><span style="width: {{ (row.CDF / max_cdf * 100) if max_cdf else 0 }}%"></span></span>
+        <span class="val">{{ row.CDF | num }}</span>
+      </div>
+    {% else %}<p class="muted">Aucune vente CDF/USD sur la période.</p>
+    {% endfor %}
+    <h2 class="mt-16">Ventes par jour en USD</h2>
+    {% set daily_usd = sales_currency_summary.daily | map(attribute='USD') | list %}
+    {% set max_usd = daily_usd | max if daily_usd else 0 %}
+    {% for row in sales_currency_summary.daily %}
+    <div class="mini">
+      <span class="lbl">{{ row.date.strftime('%d/%m') }}</span>
+      <span class="bar" style="flex:1"><span style="width: {{ (row.USD / max_usd * 100) if max_usd else 0 }}%"></span></span>
+      <span class="val">{{ row.USD | num }}</span>
+    </div>
+    {% endfor %}
+    {% if not rate %}<p class="sub">Sans taux, chaque série n'inclut que les ventes encaissées dans sa devise d'origine.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

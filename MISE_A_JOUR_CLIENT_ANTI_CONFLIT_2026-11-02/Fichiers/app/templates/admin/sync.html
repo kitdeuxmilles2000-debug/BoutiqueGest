@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Synchronisation{% endblock %}
+{% block heading %}Synchronisation{% endblock %}
+
+{% block content %}
+<div class="grid cols-3">
+  <div class="card kpi">
+    <span class="label">Dernière synchronisation réussie</span>
+    <span class="value">{{ stats.last_snapshot_at.strftime('%d/%m/%Y %H:%M') if stats.last_snapshot_at else '—' }}</span>
+    <span class="foot">Instantané local confirmé par Render</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Enregistrements transmis</span>
+    <span class="value accent">{{ stats.last_total }}</span>
+    <span class="foot">Lors du dernier transfert réussi</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Connexion</span>
+    <span class="value {{ 'good' if (stats.receiver_configured if cloud_read_only else stats.configured) else 'bad' }}">
+      {% if cloud_read_only %}
+        {{ 'Réception active' if stats.receiver_configured else 'Réception non configurée' }}
+      {% else %}
+        {{ 'Configurée' if stats.configured else 'Non configurée' }}
+      {% endif %}
+    </span>
+    <span class="foot">Transfert authentifié par HTTPS</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row between">
+    <div>
+      <h2>Copie de la boutique locale vers Render</h2>
+      <p class="sub">
+        La base locale reste la référence. « Synchroniser maintenant » envoie un instantané
+        des produits, stocks, ventes, achats, clients, fournisseurs, caisse et finances.
+        Sur Render, les enregistrements sont fusionnés par UUID; aucune donnée Render absente
+        de la copie locale n'est supprimée.
+      </p>
+    </div>
+    {% if not cloud_read_only %}
+    <form method="post" action="{{ url_for('admin.sync_process') }}" style="margin:0">
+      <button class="btn" {% if not stats.configured %}disabled{% endif %}>Synchroniser maintenant</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if stats.last_error %}
+  <p class="hint mt-16"><strong>Dernière erreur :</strong> {{ stats.last_error }}</p>
+  {% endif %}
+
+  {% if cloud_read_only %}
+  <p class="hint mt-16">Cette instance Render est en lecture seule. La synchronisation se lance depuis l'application du PC boutique.</p>
+  {% elif not stats.configured %}
+  <p class="hint mt-16">
+    Configurez sur le PC local <code>SYNC_ENABLED=1</code>,
+    <code>SYNC_REMOTE_URL</code> et le même <code>SYNC_API_TOKEN</code> que sur Render.
+    Les mots de passe et codes PIN des comptes locaux ne sont pas transmis.
+  </p>
+  {% else %}
+  <p class="hint mt-16">
+    Les collisions de codes/références avec des enregistrements différents sur Render annulent
+    l'import et sont signalées. Les comptes locaux sont représentés par des comptes miroir
+    désactivés; leurs mots de passe et codes PIN ne sont jamais exportés.
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

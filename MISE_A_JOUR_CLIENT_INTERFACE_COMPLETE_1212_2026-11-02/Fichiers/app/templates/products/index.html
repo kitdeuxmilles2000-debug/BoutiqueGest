@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% from "_macros.html" import show_pager, table_action %}
+{% block title %}Produits{% endblock %}
+{% block heading %}Produits{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Catalogue</h2>
+      <p class="sub">{{ products|length }} produit(s) affiché(s).</p>
+    </div>
+    <div class="toolbar">
+      {% if current_user.has_permission(P.PRODUCTS_VIEW) %}
+      <a href="{{ url_for('products.categories') }}" class="btn ghost sm">Catégories</a>
+      <a href="{{ url_for('products.units') }}" class="btn ghost sm">Unités</a>
+      {% endif %}
+      <a href="{{ url_for('products.index', statut='attente') }}" class="btn {{ 'sm' if statut == 'attente' else 'ghost sm' }}">En attente de validation</a>
+      {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
+      <a href="{{ url_for('products.proposer') }}" class="btn sm">Proposer un article</a>
+      <a href="{{ url_for('products.new') }}" class="btn sm">+ Nouveau produit</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="get" class="row" style="gap:8px">
+    <input type="text" class="input input-search" name="q" value="{{ search }}" placeholder="Rechercher (nom ou code)">
+    <select name="category" class="input">
+      <option value="">Toutes catégories</option>
+      {% for c in categories %}
+      <option value="{{ c.id }}" {{ 'selected' if category_id == c.id }}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="alert" class="input">
+      <option value="">Tous</option>
+      <option value="low" {{ 'selected' if alert == 'low' }}>Alertes stock uniquement</option>
+    </select>
+    <select name="statut" class="input">
+      <option value="">Tous les produits</option>
+      <option value="attente" {{ 'selected' if statut == 'attente' }}>En attente de validation</option>
+    </select>
+    <select name="famille" class="input">
+      <option value="">Toutes familles</option>
+      {% for f in familles %}<option value="{{ f }}" {{ 'selected' if famille == f }}>{{ f }}</option>{% endfor %}
+    </select>
+    <select name="couleur" class="input">
+      <option value="">Toutes couleurs</option>
+      {% for c in couleurs %}<option value="{{ c }}" {{ 'selected' if couleur == c }}>{{ c }}</option>{% endfor %}
+    </select>
+    <button class="btn sm" type="submit">Filtrer</button>
+    <a href="{{ url_for('products.index') }}" class="btn ghost sm">Effacer</a>
+  </form>
+
+  <div class="table-wrap mt-16">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Code</th><th>Nom</th><th>Catégorie</th><th>Nature</th><th>Unité</th><th>Stock validé (quantité)</th><th>Stock en unités de vente</th><th>En attente de validation</th><th>Coût moyen / unité</th>
+          <th>Prix de vente</th><th>Valeur stock</th><th>Seuil</th><th>État</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        {% set default_pu = p.selling_units | selectattr('is_sale_default') | first %}
+        {% set pending = pending_qty.get(p.id, 0) %}
+        <tr>
+          <td><code>{{ p.code }}</code></td>
+          <td>
+            <strong>{{ p.name }}</strong>
+            {% if p.famille or p.couleur %}<div class="muted" style="font-size:.78rem">{{ p.famille or '' }}{% if p.famille and p.couleur %} · {% endif %}{{ p.couleur or '' }}</div>{% endif %}
+          </td>
+          <td>{{ p.category.name if p.category else '—' }}</td>
+          <td>{{ p.kind|capitalize }}</td>
+          <td>{{ p.base_unit.code if p.base_unit else '—' }}</td>
+          <td class="num">{{ p.stock_qty | qty }}</td>
+          <td>{{ views[p.id].stock_text }}</td>
+          <td class="num">
+            {% if pending and pending > 0 %}
+              <span class="badge amber">{{ pending | qty }} {{ p.base_unit.code if p.base_unit else '' }}</span>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td class="num">{{ p.cost_avg | num }} {{ p.currency }}</td>
+          <td class="num">
+            {% if default_pu %}{{ default_pu.prix_vente | num }} {{ default_pu.currency }} / {{ default_pu.unit.code }}
+            {% elif p.selling_units %}{{ p.selling_units[0].prix_vente | num }} {{ p.selling_units[0].currency }} / {{ p.selling_units[0].unit.code }}
+            {% else %}<span class="muted">—</span>{% endif %}
+            {% set m = views[p.id].margin %}
+            {% if m.level == 'loss' %}<span class="badge red">À perte</span>
+            {% elif m.level == 'low' %}<span class="badge amber">Marge {{ m.percent | num }} %</span>
+            {% elif m.level == 'ok' %}<span class="badge green">Marge {{ m.percent | num }} %</span>{% endif %}
+          </td>
+          <td class="num">{{ p.stock_value | num }} {{ p.currency }}</td>
+          <td class="num">{{ p.seuil_alerte | qty }}</td>
+          <td>
+            {% if p.stock_qty and p.stock_qty > 0 %}<span class="badge green">En stock</span>
+            {% elif pending and pending > 0 %}<span class="badge amber">En attente</span>
+            {% else %}<span class="badge gray">Sans stock</span>{% endif %}
+            {% if p.is_out_of_stock %}<span class="badge red">Rupture</span>
+            {% elif p.is_low_stock %}<span class="badge amber">Stock bas</span>{% endif %}
+            {% if not p.active %}<span class="badge gray">Inactif</span>{% endif %}
+          </td>
+          <td>
+            <div class="row" style="gap:4px; flex-wrap:nowrap">
+              {{ table_action(url_for('products.detail', product_id=p.id), 'view', 'Voir la fiche produit') }}
+              {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
+              {{ table_action(url_for('products.edit', product_id=p.id), 'edit', 'Modifier le produit') }}
+              {{ table_action(url_for('products.delete', product_id=p.id), 'delete', 'Supprimer le produit', 'danger') }}
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="14" class="muted">Aucun produit. {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}<a href="{{ url_for('products.new') }}">Créez le premier</a>.{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    
+</table>
+  </div>
+  {{ show_pager(pager) }}
+</div>
+{% endblock %}

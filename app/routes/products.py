@@ -2,8 +2,10 @@
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.extensions import db
 from app.models.catalog import (
@@ -22,14 +24,14 @@ from app.models.catalog import (
     normalize_product_name,
 )
 from app.models.base import utcnow
-from app.models.stock import Batch, StockEntryRequest, StockEntryStatus
+from app.models.stock import Batch, MovementKind, StockEntryRequest, StockEntryStatus
 from app.security.audit import log_action
 from app.security.decorators import admin_password_required, permission_required
 from app.services.pagination import paginate_list
-from app.security.owner import is_admin_like
+from app.security.owner import is_admin_like, is_owner
 from app.security.permissions import P
 from app.services import pricing as pricing_service
-from app.services.stock import dec, product_movements
+from app.services.stock import dec, product_movements, record_movement
 products_bp = Blueprint("products", __name__, url_prefix="/produits")
 
 CURRENCIES = ("CDF", "USD")
@@ -231,6 +233,34 @@ def _next_product_code():
     return f"PRD-{today}-{count:04d}"
 
 
+def _claim_product_edit(product):
+    raw_version = (request.form.get("form_version") or "").strip()
+    try:
+        submitted_version = datetime.fromisoformat(raw_version)
+    except ValueError:
+        submitted_version = None
+    if submitted_version is None or submitted_version.tzinfo is not None:
+        flash("La fiche a changé ou est trop ancienne. Rechargez-la avant d'enregistrer.", "warning")
+        return False
+
+    claimed_version = max(utcnow(), submitted_version + timedelta(microseconds=1))
+    result = db.session.execute(
+        update(Product)
+        .where(Product.id == product.id, Product.updated_at == submitted_version)
+        .values(updated_at=claimed_version)
+    )
+    if result.rowcount != 1:
+        db.session.rollback()
+        flash(
+            "Cette fiche a été modifiée par un autre utilisateur. Vérifiez les valeurs actualisées avant de réessayer.",
+            "warning",
+        )
+        return False
+
+    set_committed_value(product, "updated_at", claimed_version)
+    return True
+
+
 def _set_base_price(product, prix, currency):
     """Enregistre le prix de vente de l'unite de base (factor 1)."""
     if prix <= 0:
@@ -330,6 +360,9 @@ def _move_base_unit_rows(product, ancienne_base, nouvelle_base):
 def _save_product(product):
     from app.services.product_units import parse_sale_unit_rows, save_product_sale_units
 
+    if product is not None and not _claim_product_edit(product):
+        return redirect(request.url)
+
     code = (
         request.form.get("code")
         or (product.code if product else "")
@@ -353,6 +386,14 @@ def _save_product(product):
         if "cost_avg" in request.form
         else (product.cost_avg if product else None)
     )
+    stock_counted = None
+    stock_reason = (request.form.get("stock_reason") or "").strip()
+    stock_counted_raw = (request.form.get("stock_counted") or "").strip().replace(",", ".")
+    if stock_counted_raw:
+        try:
+            stock_counted = Decimal(stock_counted_raw)
+        except ArithmeticError:
+            stock_counted = None
     prix_vente_base = dec(request.form.get("prix_vente_base"))
     unite_vente_id = request.form.get("unite_vente_id", type=int)
     product_preset = (request.form.get("product_preset") or "").strip()
@@ -496,6 +537,15 @@ def _save_product(product):
         code = _next_product_code()
     if not code:
         errors.append("Le code produit est obligatoire.")
+    if stock_counted_raw:
+        if product is None:
+            errors.append("La quantité de stock ne peut être corrigée qu'après la création du produit.")
+        if not is_owner(current_user):
+            errors.append("Seul le propriétaire peut corriger directement la quantité en stock.")
+        if stock_counted is None or not stock_counted.is_finite() or stock_counted < 0:
+            errors.append("La quantité réelle en stock doit être un nombre positif ou nul.")
+        if not stock_reason:
+            errors.append("Indiquez le motif de la correction de stock.")
 
     existing = Product.query.filter_by(code=code).first()
     if existing and (product is None or existing.id != product.id):
@@ -604,6 +654,28 @@ def _save_product(product):
         db.session.rollback()
         flash(str(exc), "danger")
         return redirect(request.url)
+    if stock_counted is not None:
+        stock_delta = stock_counted - dec(product.stock_qty)
+        if stock_delta:
+            previous_stock = dec(product.stock_qty)
+            record_movement(
+                product,
+                MovementKind.CORRECTION_INVENTAIRE,
+                stock_delta,
+                source_type="product_edit",
+                reason=stock_reason,
+                user_id=current_user.id,
+                commit=False,
+            )
+            log_action(
+                "stock_correction_product_edit",
+                entity="product",
+                entity_uuid=product.uuid,
+                before={"stock_qty": str(previous_stock)},
+                after={"stock_qty": str(stock_counted), "delta": str(stock_delta)},
+                reason=stock_reason,
+                commit=False,
+            )
     if is_new and initial_quantity > 0:
         from app.services.stock_validation import create_entry_request
 

@@ -61,7 +61,7 @@
       </div>
     </div>
 
-    <form method="post" class="entry-form" id="entry_form">
+    <form method="post" class="entry-form" id="entry_form" data-preserve-on-error data-preserve-key="stock-entry">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="direct_validate" id="direct_flag" value="">
       <input type="hidden" name="owner_password" id="owner_password_field" value="">

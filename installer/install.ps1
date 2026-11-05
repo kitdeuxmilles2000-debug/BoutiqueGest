@@ -20,6 +20,7 @@ $PythonInstaller = "$ScriptPath\python-$PythonVersion-amd64.exe"
 $VenvPath = "$ProjectRoot\.venv"
 $PythonExe = "$VenvPath\Scripts\python.exe"
 $PipExe = "$VenvPath\Scripts\pip.exe"
+$script:SystemPython = $null
 $DesktopPath = [Environment]::GetFolderPath("Desktop")
 $ShortcutName = "BoutiqueGest"
 $ShortcutPath = "$DesktopPath\$ShortcutName.lnk"
@@ -67,16 +68,31 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Find-SystemPython {
+    $pythonCommand = Get-Command python.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pythonCommand) {
+        $version = & $pythonCommand.Source --version 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return @{ Path = $pythonCommand.Source; Prefix = @(); Version = $version }
+        }
+    }
+
+    $launcher = Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($launcher) {
+        $version = & $launcher.Source -3 --version 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return @{ Path = $launcher.Source; Prefix = @("-3"); Version = $version }
+        }
+    }
+    return $null
+}
+
 # Vérifier si Python est installé
 function Test-PythonInstalled {
-    try {
-        $pythonVersion = python --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Info "Python détecté: $pythonVersion"
-            return $true
-        }
-    } catch {
-        return $false
+    $script:SystemPython = Find-SystemPython
+    if ($script:SystemPython) {
+        Write-Info "Python détecté: $($script:SystemPython.Version)"
+        return $true
     }
     return $false
 }
@@ -110,6 +126,10 @@ function Install-Python {
         Write-Success "Python installe avec succes"
         # Refresh PATH
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        $script:SystemPython = Find-SystemPython
+        if (-not $script:SystemPython) {
+            throw "Python a ete installe mais reste introuvable. Fermez puis relancez l'installation."
+        }
     } else {
         Write-Error "Echec de l'installation de Python (code: $($process.ExitCode))"
         exit 1
@@ -131,7 +151,14 @@ function New-VirtualEnvironment {
     }
 
     Write-Info "Creation de l'environnement virtuel..."
-    python -m venv $VenvPath
+    if (-not $script:SystemPython) {
+        $script:SystemPython = Find-SystemPython
+    }
+    if (-not $script:SystemPython) {
+        throw "Python est introuvable. Verifiez la commande python ou le lanceur py -3."
+    }
+    $pythonArgs = @($script:SystemPython.Prefix) + @("-m", "venv", $VenvPath)
+    & $script:SystemPython.Path @pythonArgs
 
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Environnement virtuel cree avec succes"

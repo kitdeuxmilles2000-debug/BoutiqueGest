@@ -3,6 +3,26 @@
 # Ce script vérifie si Python est installé et sa version
 
 $ErrorActionPreference = "Stop"
+$script:PythonCommand = $null
+
+function Find-SystemPython {
+    $pythonCommand = Get-Command python.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pythonCommand) {
+        $version = & $pythonCommand.Source --version 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return @{ Path = $pythonCommand.Source; Prefix = @(); Version = $version }
+        }
+    }
+
+    $launcher = Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($launcher) {
+        $version = & $launcher.Source -3 --version 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return @{ Path = $launcher.Source; Prefix = @("-3"); Version = $version }
+        }
+    }
+    return $null
+}
 
 function Write-ColorOutput {
     param(
@@ -19,9 +39,9 @@ function Test-PythonVersion {
     )
 
     try {
-        $output = python --version 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $versionString = $output -replace "Python ", ""
+        $script:PythonCommand = Find-SystemPython
+        if ($script:PythonCommand) {
+            $versionString = [string]$script:PythonCommand.Version -replace "Python ", ""
             $version = [version]$versionString
 
             Write-ColorOutput "[OK] Python détecté: $versionString" "Green"
@@ -45,7 +65,9 @@ function Test-PythonVersion {
 
 function Test-Pip {
     try {
-        $output = python -m pip --version 2>&1
+        if (-not $script:PythonCommand) { return $false }
+        $pythonArgs = @($script:PythonCommand.Prefix) + @("-m", "pip", "--version")
+        $output = & $script:PythonCommand.Path @pythonArgs 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-ColorOutput "[OK] Pip détecté: $output" "Green"
             return $true
@@ -59,7 +81,9 @@ function Test-Pip {
 
 function Test-Venv {
     try {
-        $output = python -m venv --help 2>&1
+        if (-not $script:PythonCommand) { return $false }
+        $pythonArgs = @($script:PythonCommand.Prefix) + @("-m", "venv", "--help")
+        $output = & $script:PythonCommand.Path @pythonArgs 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-ColorOutput "[OK] Module venv disponible" "Green"
             return $true
@@ -98,7 +122,7 @@ if ($pythonOk -and $pipOk -and $venvOk) {
     exit 0
 } else {
     Write-ColorOutput "[ERROR] Certains prerequis manquent" "Red"
-    Write-ColorOutput "        Veuillez installer Python $Major.$Minimum ou superieur" "Red"
+    Write-ColorOutput "        Veuillez installer Python 3.12 ou superieur" "Red"
     Write-ColorOutput "        Telechargement: https://www.python.org/downloads/" "Cyan"
     exit 1
 }

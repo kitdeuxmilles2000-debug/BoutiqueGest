@@ -9,9 +9,16 @@
   .prod-form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 12px; }
   .prod-form .field { margin-bottom: 0; }
   .prod-form .field.full { grid-column: 1 / -1; }
+  .product-form-nav { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); padding: 0 0 8px; }
+  .product-form-nav a { padding: 7px 10px; color: var(--muted); font-size: .82rem; font-weight: 700; text-decoration: none; border-bottom: 2px solid transparent; }
+  .product-form-nav a:hover { color: var(--primary); border-color: var(--primary); }
   .prod-form .section-title { grid-column: 1 / -1; margin: 10px 0 2px; font-size: .95rem; font-weight: 800; }
   .prod-form .section-sub { grid-column: 1 / -1; margin: -2px 0 4px; color: var(--muted); font-size: .82rem; }
   .prod-form input, .prod-form select { padding: 8px 10px; border-radius: 10px; font-size: .9rem; }
+  .product-details { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 10px; }
+  .product-details summary { cursor: pointer; font-weight: 700; color: var(--primary); }
+  .product-details-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 12px; margin-top: 12px; }
+  .product-form-actions { position: sticky; bottom: 0; z-index: 2; background: #fff; border-top: 1px solid var(--line); padding: 12px 0 4px; }
   .prod-preview { position: sticky; top: 78px; }
   .prod-preview .kpi-row { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-top: 10px; }
   .prod-preview .kpi-sm { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
@@ -51,8 +58,17 @@
         </div>
       </div>
 
-      <form method="post" class="prod-form">
+      <form method="post" class="prod-form" data-preserve-on-error data-preserve-key="product">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if product %}<input type="hidden" name="form_version" value="{{ product.updated_at.isoformat() }}">{% endif %}
+        <nav class="product-form-nav" aria-label="Sections du formulaire">
+          <a href="#product-identity">Fiche</a>
+          <a href="#product-pricing">Prix</a>
+          <a href="#product-units">Unités de vente</a>
+          {% if product and is_owner() %}<a href="#product-stock">Stock</a>{% endif %}
+          <a href="#product-options">Options</a>
+        </nav>
+        <div class="section-title" id="product-identity">Informations principales</div>
         <div class="field">
           <label for="code">Code produit</label>
           <input type="text" id="code" name="code" value="{{ product.code if product else '' }}" maxlength="40" {{ 'readonly' if product }} placeholder="Généré automatiquement">
@@ -74,7 +90,7 @@
         </div>
         <div class="field">
           <label for="category_id">Catégorie du produit *</label>
-          <select id="category_id" name="category_id" required {{ 'disabled' if not product }}>
+          <select id="category_id" name="category_id" required>
             <option value="">— Choisir —</option>
             {% for c in categories %}
             <option value="{{ c.id }}" {{ 'selected' if product and product.category_id == c.id }}>{{ c.name }}</option>
@@ -114,24 +130,29 @@
           <label for="type_mesure">Type de mesure</label>
           <input type="text" id="type_mesure" name="type_mesure" value="{{ product.type_mesure if product else '' }}" maxlength="30" placeholder="liquide / poids / piece">
         </div>
-        <div class="field">
-          <label for="famille">Famille / Catégorie technique</label>
-          <input type="text" id="famille" name="famille" value="{{ product.famille if product else '' }}" maxlength="80">
-        </div>
-        <div class="field">
-          <label for="couleur">Couleur</label>
-          <input type="text" id="couleur" name="couleur" value="{{ product.couleur if product else '' }}" maxlength="80">
-        </div>
-        <div class="field">
-          <label for="marque">Marque</label>
-          <input type="text" id="marque" name="marque" value="{{ product.marque if product else '' }}" maxlength="80">
-        </div>
-        <div class="field">
-          <label for="modele">Modèle</label>
-          <input type="text" id="modele" name="modele" value="{{ product.modele if product else '' }}" maxlength="80">
-        </div>
+        <details class="product-details">
+          <summary>Caractéristiques complémentaires (famille, couleur, marque, modèle)</summary>
+          <div class="product-details-grid">
+            <div class="field">
+              <label for="famille">Famille / Catégorie technique</label>
+              <input type="text" id="famille" name="famille" value="{{ product.famille if product else '' }}" maxlength="80">
+            </div>
+            <div class="field">
+              <label for="couleur">Couleur</label>
+              <input type="text" id="couleur" name="couleur" value="{{ product.couleur if product else '' }}" maxlength="80">
+            </div>
+            <div class="field">
+              <label for="marque">Marque</label>
+              <input type="text" id="marque" name="marque" value="{{ product.marque if product else '' }}" maxlength="80">
+            </div>
+            <div class="field">
+              <label for="modele">Modèle</label>
+              <input type="text" id="modele" name="modele" value="{{ product.modele if product else '' }}" maxlength="80">
+            </div>
+          </div>
+        </details>
 
-      <div class="section-title">Prix et valorisation</div>
+      <div class="section-title" id="product-pricing">Prix et valorisation</div>
       <div class="section-sub">Les valeurs actuelles sont préremplies. Laissez-les inchangées si vous ne souhaitez pas les modifier.</div>
       <div class="field">
         <label for="cost_avg">Coût moyen par unité de stock ({{ product.base_unit.code if product and product.base_unit else 'unité' }})</label>
@@ -147,7 +168,20 @@
         <p class="section-sub" id="margin_hint"></p>
       </div>
 
-      <div class="section-title">Unité de vente</div>
+      {% if product and is_owner() %}
+      <div class="section-title" id="product-stock">Correction de stock</div>
+      <div class="section-sub">Stock actuel : {{ product.stock_qty|qty }} {{ product.base_unit.code if product.base_unit }}. Laissez vide pour ne pas le modifier. La correction sera inscrite dans les mouvements.</div>
+      <div class="field">
+        <label for="stock_counted">Quantité réelle constatée</label>
+        <input type="text" id="stock_counted" name="stock_counted" inputmode="decimal" placeholder="Saisir pour corriger">
+      </div>
+      <div class="field">
+        <label for="stock_reason">Motif de la correction</label>
+        <input type="text" id="stock_reason" name="stock_reason" maxlength="255" placeholder="Ex. Comptage physique">
+      </div>
+      {% endif %}
+
+      <div class="section-title" id="product-units">Unité de vente</div>
       <div class="section-sub">Quatre lignes sont proposées au départ. Choisissez un format, indiquez son contenu et son prix. Le stock est compté en ml, pièce, g ou cm ; vous pouvez ajouter d'autres formats.</div>
       <div class="field full">
         <div id="sale_unit_rows" style="display:grid;gap:8px">
@@ -215,7 +249,7 @@
       <p class="section-sub">Une demande d'approvisionnement initiale sera créée et restera en attente de validation du stock.</p>
       {% endif %}
 
-      <div class="section-title">Options</div>
+      <div class="section-title" id="product-options">Options</div>
       <div class="field">
         <input type="hidden" name="active" value="0">
         <label><input type="checkbox" name="active" value="1" {{ 'checked' if not product or product.active }}> Actif</label>
@@ -237,7 +271,7 @@
         <input type="number" id="shelf_life_days" name="shelf_life_days" min="0" value="{{ product.shelf_life_days if product and product.shelf_life_days is not none else '' }}">
       </div>
 
-      <div class="field full row">
+      <div class="field full row product-form-actions">
         <button type="submit" class="btn">Enregistrer</button>
         <a href="{{ url_for('products.index') }}" class="btn ghost">Annuler</a>
       </div>

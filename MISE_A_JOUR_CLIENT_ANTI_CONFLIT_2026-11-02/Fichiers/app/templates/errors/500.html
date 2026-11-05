@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Erreur serveur{% endblock %}
+{% block heading %}Erreur serveur{% endblock %}
+
+{% block content %}
+<div class="error-wrap">
+  <div>
+    <p class="error-code">500</p>
+    <h2>Une erreur est survenue</h2>
+    <p class="muted">L'incident a été enregistré. Réessayez ou contactez l'administrateur.</p>
+    <a href="{{ url_for('main.dashboard') }}" class="btn mt-16">Retour au tableau de bord</a>
+  </div>
+</div>
+{% endblock %}

@@ -58,7 +58,7 @@
       <p class="sub">{{ product_count }} produit(s) actif(s). Valeur et marges calculées séparément par devise, au coût moyen et au prix du format de vente par défaut.</p>
     </div>
     <div class="toolbar">
-      <a href="{{ url_for('stock.valuation') }}" class="btn ghost sm">Rapport d?taill? des valeurs</a>
+      <a href="{{ url_for('stock.valuation') }}" class="btn ghost sm">Rapport détaillé des valeurs</a>
       {% if current_user.has_permission(P.STOCK_MANAGE) %}<a href="{{ url_for('stock.entry') }}" class="btn sm">+ Entrée / Créer un produit</a>{% endif %}
     {% if current_user.has_permission(P.LOSS_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Déclarer une perte</a>{% endif %}
     {% if current_user.has_permission(P.INVENTORY_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Inventaire</a>{% endif %}
@@ -96,10 +96,17 @@
           <td>
             <div class="row" style="gap:4px;flex-wrap:nowrap">
             {{ table_action(url_for('products.detail', product_id=p.id), 'view', 'Voir la fiche produit') }}
-            {% if current_user.has_permission(P.STOCK_MANAGE) %}
+            {% if current_user.has_permission(P.PRODUCTS_MANAGE) %}
+            {{ table_action(url_for('products.edit', product_id=p.id), 'edit', 'Modifier la fiche produit') }}
+            {% endif %}
+            {% if current_user.has_permission(P.STOCK_MANAGE) and is_owner() %}
             <button type="button" class="btn sm btn-icon" title="Ravitailler {{ p.name }}" aria-label="Ravitailler {{ p.name }}" onclick="openRestock({{ p.id }}, {{ p.name|tojson }})">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16l-1 13H5L4 7Zm4 0V5a4 4 0 0 1 8 0v2m-4 3v6m-3-3h6" /></svg>
             </button>
+            {% elif current_user.has_permission(P.STOCK_MANAGE) %}
+            <a class="btn sm btn-icon" title="Demander un approvisionnement" aria-label="Demander un approvisionnement" href="{{ url_for('stock.entry') }}">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16l-1 13H5L4 7Zm4 0V5a4 4 0 0 1 8 0v2m-4 3v6m-3-3h6" /></svg>
+            </a>
             {% endif %}
             </div>
           </td>
@@ -128,7 +135,7 @@
 </div>
 <div class="modal" id="restock_modal">
   <div class="modal-dialog" style="max-width:420px">
-    <form method="post" id="restock_form">
+    <form method="post" id="restock_form" data-preserve-on-error data-preserve-key="stock-restock">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-header">
         <h3>Ravitailler</h3>
@@ -138,7 +145,7 @@
         <p class="sub">Ajouter au stock existant (sans créer de doublon). Le coût saisi est par unité de stock.</p>
         <div class="field full">
           <label>Produit</label>
-          <input type="text" id="restock_product" readonly>
+          <input type="text" id="restock_product" name="product_name" readonly>
         </div>
         <div class="field full">
           <label for="restock_qty">Quantité à ajouter</label>

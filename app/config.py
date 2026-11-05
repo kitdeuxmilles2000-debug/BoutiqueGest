@@ -15,7 +15,8 @@ def _database_uri():
         if database_url.startswith("postgresql://"):
             return database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
         return database_url
-    if os.environ.get("FLASK_CONFIG") == "prod":
+    is_render = os.environ.get("RENDER") == "true" or bool(os.environ.get("RENDER_SERVICE_ID"))
+    if os.environ.get("FLASK_CONFIG") == "prod" and is_render:
         raise RuntimeError("DATABASE_URL est obligatoire en production; configurez la base Render.")
     return "sqlite:///" + DEFAULT_DB_PATH.replace("\\", "/")
 
@@ -58,6 +59,16 @@ class Config:
     SYNC_REMOTE_URL = os.environ.get("SYNC_REMOTE_URL", "")
     SYNC_API_TOKEN = os.environ.get("SYNC_API_TOKEN", "")
     CLOUD_READ_ONLY = os.environ.get("CLOUD_READ_ONLY", "0") == "1"
+
+    # Synchronisation des données métier via un fichier privé sur une branche GitHub dédiée.
+    GITHUB_SYNC_ENABLED = os.environ.get("GITHUB_SYNC_ENABLED", "0") == "1"
+    GITHUB_SYNC_REPOSITORY = os.environ.get("GITHUB_SYNC_REPOSITORY", "")
+    GITHUB_SYNC_TOKEN = os.environ.get("GITHUB_SYNC_TOKEN", "")
+    GITHUB_SYNC_BRANCH = os.environ.get("GITHUB_SYNC_BRANCH", "boutiquegest-data")
+    GITHUB_SYNC_PATH = os.environ.get(
+        "GITHUB_SYNC_PATH", "sync/boutiquegest-snapshot.json.gz"
+    )
+    GITHUB_SYNC_POLL_SECONDS = _int_env("GITHUB_SYNC_POLL_SECONDS", 30)
 
     # E-mails (rapport journalier) : optionnel, sinon les messages restent en file
     SMTP_HOST = os.environ.get("SMTP_HOST", "")

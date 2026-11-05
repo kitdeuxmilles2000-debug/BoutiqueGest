@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Rôles & permissions{% endblock %}
+{% block heading %}Rôles &amp; permissions{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Rôles configurés</h2>
+  <p class="sub">Les permissions sont vérifiées côté serveur à chaque action.</p>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Rôle</th><th>Description</th><th>Super admin</th><th>Permissions</th></tr>
+      </thead>
+      <tbody>
+        {% for r in roles %}
+        <tr>
+          <td><strong>{{ r.label }}</strong><br><span class="pill">{{ r.name }}</span></td>
+          <td style="white-space:normal">{{ r.description or '—' }}</td>
+          <td>{% if r.is_super_admin %}<span class="badge blue">Oui</span>{% else %}<span class="badge gray">Non</span>{% endif %}</td>
+          <td>{{ 'Toutes' if r.is_super_admin else r.permission_codes|length }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Permissions disponibles</h2>
+  <p class="sub">Réparties par domaine fonctionnel.</p>
+  <div class="grid cols-3">
+    {% for category in PERMISSION_LABELS.values()|map(attribute=1)|unique %}
+    <div class="card">
+      <strong>{{ category }}</strong>
+      <ul class="muted" style="margin:8px 0 0;padding-left:18px">
+        {% for code, info in PERMISSION_LABELS.items() if info[1] == category %}
+        <li>{{ info[0] }} <span class="pill">({{ code }})</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

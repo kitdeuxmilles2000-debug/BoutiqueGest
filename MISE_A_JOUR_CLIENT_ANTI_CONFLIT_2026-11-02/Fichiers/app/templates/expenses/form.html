@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Nouvelle dépense{% endblock %}
+{% block heading %}Nouvelle dépense{% endblock %}
+
+{% block content %}
+<div class="card form-narrow">
+  <h2>Saisir une depense</h2>
+  <p class="sub">La depense est creee en « saisie », puis soumise pour validation.</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field"><label for="amount">Montant</label><input type="text" id="amount" name="amount" required></div>
+    <div class="field">
+      <label for="currency">Devise</label>
+      <select id="currency" name="currency"><option value="CDF">CDF</option><option value="USD">USD</option></select>
+    </div>
+    <div class="field">
+      <label for="category_id">Categorie</label>
+      <select id="category_id" name="category_id"><option value="">—</option>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="motif">Motif</label><input type="text" id="motif" name="motif" required></div>
+    <div class="field"><label for="beneficiary">Beneficiaire</label><input type="text" id="beneficiary" name="beneficiary"></div>
+    <div class="field">
+      <label for="method">Moyen de paiement</label>
+      <select id="method" name="method">{% for code, label in methods.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select>
+    </div>
+    <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" rows="2"></textarea></div>
+    <div class="row"><button class="btn" type="submit">Enregistrer</button><a href="{{ url_for('expenses.index') }}" class="btn ghost">Annuler</a></div>
+  </form>
+</div>
+{% endblock %}

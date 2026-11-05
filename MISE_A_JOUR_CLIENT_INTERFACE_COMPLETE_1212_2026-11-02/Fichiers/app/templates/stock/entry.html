@@ -1,0 +1,1092 @@
+{% extends "base.html" %}
+{% block title %}Entrée de stock{% endblock %}
+{% block heading %}Entrée de stock{% endblock %}
+
+{% block content %}
+<style>
+  .entry-layout { display: grid; grid-template-columns: 1fr 380px; gap: 18px; align-items: start; }
+  @media (max-width: 1080px) { .entry-layout { grid-template-columns: 1fr; } }
+  .entry-form { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 16px; }
+  .entry-form .field { margin-bottom: 0; }
+  .entry-form .field.full { grid-column: 1 / -1; }
+  .entry-form .section-title { grid-column: 1 / -1; margin: 8px 0 2px; font-size: .95rem; font-weight: 800; }
+  .entry-form .section-sub { grid-column: 1 / -1; margin: -2px 0 6px; color: var(--muted); font-size: .83rem; }
+  .prod-preview { position: sticky; top: 78px; }
+  .prod-preview .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+  .prod-preview .info-cell { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+  .prod-preview .info-cell .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .prod-preview .info-cell .value { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .prod-preview .unit-item { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
+  .toggle-new { border: 1px dashed #94a3b8; border-radius: 10px; padding: 10px 12px; background: #f8fafc; }
+  .prod-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 8px; margin-top: 10px; max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fbfcfe; }
+  .prod-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; width: 100%; border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 9px 11px; cursor: pointer; font: inherit; }
+  .prod-item:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+  .prod-item.selected { border-color: var(--primary); background: #eff6ff; box-shadow: 0 0 0 2px rgba(37, 99, 235, .18); }
+  .prod-item .pi-main { min-width: 0; }
+  .prod-item .pi-name { font-weight: 700; font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prod-item .pi-meta { font-size: .74rem; color: var(--muted); }
+  .prod-item .pi-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .picker-summary { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+  .badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .badge.green { background: #dcfce7; color: #166534; }
+  .badge.orange { background: #ffedd5; color: #9a3412; }
+  .badge.red { background: #fee2e2; color: #991b1b; }
+  .badge.grey { background: #e2e8f0; color: #334155; }
+  .info-banner { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .info-banner .title { font-weight: 800; }
+  .info-banner .sub { color: var(--muted); font-size: .86rem; }
+  .mod-block { grid-column: 1 / -1; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 12px; display: none; }
+  .mod-block.active { display: block; }
+  .mod-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 16px; }
+  .side-stack { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 78px; }
+  .side-stack .prod-preview { position: static; }
+  .calc-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 12px; margin-top: 10px; }
+  .calc-grid .field { margin-bottom: 0; }
+  .calc-grid .field.full { grid-column: 1 / -1; }
+  .calc-out { margin-top: 12px; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 10px 12px; background: #f8fafc; font-size: .86rem; display: flex; flex-direction: column; gap: 4px; font-variant-numeric: tabular-nums; }
+  .sale-unit-row { display: grid; grid-template-columns: minmax(150px,1fr) minmax(100px,.75fr) minmax(100px,.75fr) minmax(130px,1fr) auto; gap: 8px; align-items: end; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .sale-unit-row .field { min-width: 0; }
+  .sale-unit-row .sale-unit-custom { display: none; }
+  .sale-unit-row.is-custom .sale-unit-custom { display: block; }
+  .sale-unit-preview { grid-column: 1 / -1; color: var(--muted); font-size: .78rem; }
+  @media (max-width: 700px) { .sale-unit-row { grid-template-columns: repeat(2, minmax(0,1fr)); } .sale-unit-row .sale-unit-actions { grid-column: 1 / -1; } }
+</style>
+
+<div class="entry-layout">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>Demande d'entrée en stock</h2>
+        <p class="sub">Soumission en attente de validation. Le stock et le coût moyen ne bougent qu'après validation par le propriétaire.</p>
+      </div>
+    </div>
+
+    <form method="post" class="entry-form" id="entry_form" data-preserve-on-error data-preserve-key="stock-entry">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="direct_validate" id="direct_flag" value="">
+      <input type="hidden" name="owner_password" id="owner_password_field" value="">
+      <input type="hidden" id="duplicate_check_done" value="">
+
+      <div class="field full">
+        <label for="product_search">Produit à entrer en stock</label>
+        <input type="hidden" id="product_id" name="product_id" value="">
+        <input type="search" id="product_search" placeholder="Rechercher un produit (nom ou code)…" oninput="filterProducts()" autocomplete="off">
+        <div class="picker-summary" id="picker_summary"></div>
+        <div class="prod-picker" id="product_picker" style="max-height:260px">
+          {% for p in products %}
+          {% set pend = pending_qty.get(p.id, 0) %}
+          {% set stock = p.stock_qty|default(0) %}
+          <button type="button" class="prod-item" data-id="{{ p.id }}"
+                  data-search="{{ (p.name ~ ' ' ~ p.code ~ ' ' ~ (p.category.name if p.category else '') ~ ' ' ~ (p.base_unit.label if p.base_unit else ''))|lower }}"
+                  onclick="selectProduct({{ p.id }})">
+            <div class="pi-main">
+              <div class="pi-name">{{ p.name }}</div>
+              <div class="pi-meta">{{ p.code }} · {{ p.category.name if p.category else 'Sans catégorie' }} · {{ p.base_unit.label if p.base_unit else '—' }}</div>
+            </div>
+            <div class="pi-badges">
+              {% if not p.active %}<span class="badge grey">Inactif</span>{% endif %}
+              {% if stock > 0 %}
+                <span class="badge green">{{ stock|qty }} {{ p.base_unit.code if p.base_unit else '' }}</span>
+              {% elif stock < 0 %}
+                <span class="badge red">Rupture</span>
+              {% else %}
+                <span class="badge grey">0</span>
+              {% endif %}
+              {% if pend > 0 %}<span class="badge orange">Attente {{ pend|qty }}</span>{% endif %}
+            </div>
+          </button>
+          {% endfor %}
+        </div>
+        <p class="hint">Sélectionnez le produit. Pour les liquides (bidons/verres), utilisez le calculateur ci-contre pour convertir facilement.</p>
+      </div>
+
+      <div class="info-banner" id="auto_info" style="display:none">
+        <div class="title">Produit existant — données reprises de la fiche</div>
+        <div class="sub">Unité de base, devise, unités de vente, seuil et péremption/durée de conservation sont déjà définis. Indiquez la quantité reçue et son prix d'achat : le coût moyen sera recalculé après validation.</div>
+      </div>
+
+      <input type="hidden" id="lot_number" name="lot_number" value="">
+      <input type="hidden" id="expiry_date" name="expiry_date" value="">
+      <input type="hidden" id="reason" name="reason" value="Réception depuis fiche produit">
+
+      <div class="field full" id="field_qty" style="display:none">
+        <div class="entry-form">
+          <div class="field">
+            <label for="quantity">Quantité reçue *</label>
+            <input type="text" id="quantity" name="quantity" placeholder="Ex. 3" oninput="updateExistingQtyPreview()">
+          </div>
+          <div class="field">
+            <label for="unit_id">Unité de réception</label>
+            <select id="unit_id" name="unit_id" onchange="onUnitChange()"></select>
+          </div>
+        </div>
+        <p class="hint" id="existing_qty_hint">La quantité est convertie automatiquement dans l'unité de stock.</p>
+      </div>
+      <div class="field" id="field_cost" style="display:none">
+        <label for="cost" id="existing_cost_label">Prix d'achat par unité reçue</label>
+        <input type="text" id="cost" name="cost" value="0" inputmode="decimal" required oninput="updateExistingQtyPreview()">
+        <p class="hint" id="existing_cost_hint">Le total et le coût moyen après réception seront calculés ici.</p>
+      </div>
+      <div class="field" id="field_supplier">
+        <label for="supplier_id">Fournisseur (facultatif)</label>
+        <select id="supplier_id" name="supplier_id">
+          <option value="">— Aucun —</option>
+          {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div class="field full" id="mod_toggle" style="display:none">
+        <label><input type="checkbox" id="allow_mod" onchange="toggleMod()"> Apporter des modifications (à n'utiliser qu'en cas de correction après contrôle)</label>
+      </div>
+
+      <div class="mod-block" id="mod_block">
+        <div class="mod-grid">
+          <div class="field">
+            <label for="m_lot_number">N° de lot</label>
+            <input type="text" id="m_lot_number" name="m_lot_number">
+          </div>
+          <div class="field">
+            <label for="m_expiry_date">Date de péremption / expiration</label>
+            <input type="date" id="m_expiry_date" name="m_expiry_date">
+          </div>
+          <div class="field">
+            <label for="m_cost">Coût unitaire modifié (par unité saisie)</label>
+            <input type="text" id="m_cost" name="m_cost" placeholder="Laisser vide pour conserver celui de la fiche">
+          </div>
+          <div class="field">
+            <label for="m_reason">Motif des modifications *</label>
+            <input type="text" id="m_reason" name="m_reason" placeholder="Obligatoire si modifications">
+          </div>
+        </div>
+        <p class="hint">Toute modification doit être justifiée. Les valeurs initiales sont celles du produit.</p>
+      </div>
+
+      {% if can_create %}
+      <div class="section-title">Créer un nouveau produit (facultatif)</div>
+      <div class="section-sub">Nom du produit + catégorie + type de produit suffisent. Code généré automatiquement.</div>
+      <div class="field full toggle-new">
+        <label><input type="checkbox" id="toggle_new_product" onchange="toggleNewProduct()"> Créer un nouveau produit et soumettre une demande d'entrée</label>
+      </div>
+
+      <div id="new_product_block" style="display:none; grid-column:1/-1;">
+        <div class="entry-form" style="gap:10px 14px;">
+          <div class="field full">
+            <label for="new_product_name">Nom du produit *</label>
+            <input type="text" id="new_product_name" name="new_product_name" placeholder="Ex. Lait de vache, Eau">
+          </div>
+          <div class="field">
+            <label for="new_preset_type">Type de produit *</label>
+            <select id="new_preset_type" name="new_preset_type" onchange="applyNewPresetType(this.value)">
+              <option value="">— Choisir —</option>
+              <option value="liquide">Liquide (bidon/verre/litre)</option>
+              <option value="carton">Produit en carton / emballage</option>
+              <option value="couture">Matériel de couture</option>
+              <option value="poids">Au poids (kg/g)</option>
+              <option value="tissu">Tissu (m/cm)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_category_id">Catégorie du produit *</label>
+            <select id="new_category_id" name="new_category_id" required disabled>
+              <option value="">— Choisir —</option>
+              {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_base_unit_id">Unité de base (comptage) *</label>
+            <select id="new_base_unit_id" name="new_base_unit_id" required disabled>
+              <option value="">— Choisir —</option>
+              {% for u in units %}<option value="{{ u.id }}" data-code="{{ u.code }}" data-unit-kind="{{ u.kind }}">{{ u.label }} ({{ u.code }})</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_kind">Nature</label>
+            <select id="new_kind" name="new_kind">
+              {% for code in ['boisson', 'eau', 'lait', 'accessoire', 'autre'] %}<option value="{{ code }}">{{ code|capitalize }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="new_currency">Devise</label>
+            <select id="new_currency" name="new_currency" onchange="syncNewIntakeCost()"><option value="CDF">CDF</option><option value="USD">USD</option></select>
+          </div>
+          <div class="field">
+            <label for="new_qty_initial">Quantité reçue *</label>
+            <input type="text" id="new_qty_initial" name="new_qty_initial" value="" placeholder="Ex. 3" oninput="syncNewIntakeCost()">
+          </div>
+          <div class="field">
+            <label for="new_qty_unit">Unité de réception</label>
+            <select id="new_qty_unit" name="new_qty_unit" onchange="syncNewIntakeCost()">
+              <option value="base">Unité de base</option>
+            </select>
+          </div>
+          <div class="field full">
+            <p class="hint" id="new_qty_conversion_hint">La quantité reçue sera convertie dans l'unité de stock.</p>
+          </div>
+          <div class="field">
+            <label for="new_cost_avg">Prix d'achat par unité de stock *</label>
+            <input type="text" id="new_cost_avg" name="new_cost_avg" value="0" oninput="syncNewIntakeCost()">
+            <p class="hint" id="new_intake_total_hint">Le coût total de cette réception sera calculé ici.</p>
+          </div>
+          <div class="field">
+            <label for="new_prix_vente">Prix vente unité de base (facultatif)</label>
+            <input type="text" id="new_prix_vente" name="new_prix_vente" value="0">
+          </div>
+          <details class="field full">
+            <summary style="cursor:pointer;font-weight:700">Unité standard partagée (facultatif)</summary>
+            <p class="hint">Les formats configurés ci-dessous sont recommandés pour les conversions et les prix différents.</p>
+            <div class="entry-form">
+              <div class="field">
+                <label for="new_unite_vente_id">Unité standard</label>
+                <select id="new_unite_vente_id" name="new_unite_vente_id">
+                  <option value="">— Aucune —</option>
+                  {% for u in units %}<option value="{{ u.id }}" data-unit-kind="{{ u.kind }}">{{ u.label }} ({{ u.code }})</option>{% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label for="new_facteur">Contenu en unité de stock</label>
+                <input type="text" id="new_facteur" name="new_facteur" value="1">
+              </div>
+              <div class="field">
+                <label for="new_prix_vente_unite">Prix de vente</label>
+                <input type="text" id="new_prix_vente_unite" name="new_prix_vente_unite" value="0">
+              </div>
+            </div>
+          </details>
+          <div class="field full">
+            <label>Formats de vente (quatre lignes proposées)</label>
+            <p class="hint">Choisissez le format, sa contenance et son prix. Exemple : verre 25 ml, bidon 5 L, carton de 12 pièces, sac de 25 kg, rouleau de 10 m. Le POS et le stock utilisent les mêmes conversions.</p>
+            <div id="new_sale_unit_rows" style="display:grid;gap:8px"></div>
+            <button type="button" class="btn ghost sm mt-8" onclick="addNewSaleUnit()">+ Ajouter un format</button>
+          </div>
+          <div class="field">
+            <label for="new_seuil_alerte">Seuil d'alerte</label>
+            <input type="text" id="new_seuil_alerte" name="new_seuil_alerte" value="0">
+          </div>
+          <div class="field full row" style="gap:14px">
+            <label><input type="checkbox" name="new_is_perishable"> Périssable</label>
+            <label><input type="checkbox" name="new_track_lot"> Suivi par lot</label>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="field full row">
+        <button type="button" class="btn" onclick="openDirect()">Entrer en stock directement</button>
+        <button type="submit" class="btn ghost">Soumettre à validation</button>
+        <a href="{{ url_for('stock.entry_pending') }}" class="btn ghost">Voir les entrées à valider</a>
+        <a href="{{ url_for('stock.index') }}" class="btn ghost">Annuler</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal" id="direct_modal">
+    <div class="modal-dialog" style="max-width:420px">
+      <div class="modal-header">
+        <h3 id="direct_modal_title">Confirmer l'entrée en stock</h3>
+        <button type="button" class="btn ghost sm" onclick="closeDirect()">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="sub" id="direct_modal_message">L'entrée modifie le stock immédiatement. Saisissez le mot de passe d'un propriétaire ou d'un administrateur.</p>
+        <div class="field full">
+          <label for="direct_password">Mot de passe</label>
+          <input type="password" id="direct_password" autocomplete="current-password" onkeydown="if (event.key === 'Enter') { event.preventDefault(); submitDirect(); }">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn ghost" onclick="closeDirect()">Annuler</button>
+        <button type="button" class="btn" id="direct_modal_submit" onclick="submitDirect()">Confirmer et entrer en stock</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="side-stack">
+  <div class="card prod-preview">
+    <div class="card-head">
+      <div>
+        <h2>Fiche produit</h2>
+        <p class="sub">Informations reprises automatiquement.</p>
+      </div>
+    </div>
+    <div>
+      <div style="font-weight:800;font-size:1.02rem" id="pv_name">— Aucun produit sélectionné —</div>
+      <div class="muted" id="pv_code"></div>
+    </div>
+    <div class="info-grid">
+      <div class="info-cell"><span class="label">Unité de stock</span><span class="value" id="pv_base_unit">—</span></div>
+      <div class="info-cell"><span class="label">Coût moyen d'achat</span><span class="value" id="pv_cost">—</span></div>
+      <div class="info-cell"><span class="label">Stock actuel</span><span class="value" id="pv_stock">—</span></div>
+      <div class="info-cell"><span class="label">Valeur stock au coût moyen</span><span class="value" id="pv_value">—</span></div>
+      <div class="info-cell"><span class="label">Périssable</span><span class="value" id="pv_perishable">—</span></div>
+      <div class="info-cell"><span class="label">Péremption</span><span class="value" id="pv_expiry">—</span></div>
+      <div class="info-cell"><span class="label">En attente de validation</span><span class="value" id="pv_pending">—</span></div>
+      <div class="info-cell"><span class="label">État</span><span class="value" id="pv_state">—</span></div>
+    </div>
+    <div id="pv_units" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card calc-card">
+    <div class="card-head">
+      <div>
+        <h2>Calculateur bidon / détail</h2>
+        <p class="sub">Bidon, cuve, sac → verres/beignets/unités.</p>
+      </div>
+    </div>
+    <div class="calc-grid">
+      <div class="field">
+        <label for="calc_qty">Nombre de contenants</label>
+        <input type="text" id="calc_qty" value="1" oninput="calcRun()">
+      </div>
+      <div class="field">
+        <label for="calc_pack">Contenu total du contenant (unité de base)</label>
+        <input type="text" id="calc_pack" placeholder="Ex. 20000 (ml) ou 1000 (g)" oninput="calcRun()">
+      </div>
+      <div class="field">
+        <label for="calc_total">Prix d'achat total</label>
+        <input type="text" id="calc_total" placeholder="Ex. 30000" oninput="calcRun()">
+      </div>
+      <div class="field">
+        <label for="calc_sale_unit">Vendre en</label>
+        <select id="calc_sale_unit" onchange="calcRun()"></select>
+      </div>
+      <div class="field full">
+        <label for="calc_price">Prix de vente de cette unité de détail</label>
+        <input type="text" id="calc_price" placeholder="Ex. 1000" oninput="calcRun()">
+      </div>
+    </div>
+    <div class="calc-out" id="calc_out">Choisissez un produit, indiquez contenu + prix total.</div>
+    <div class="row" style="gap:8px; margin-top:10px">
+      <button type="button" class="btn ghost sm" onclick="calcApply()">Appliquer au formulaire</button>
+    </div>
+  </div>
+  </div>
+</div>
+
+<script>
+const PRESET_UNIT_KINDS = {
+  liquide: ['volume', 'contenance'],
+  carton: ['piece', 'contenance'],
+  couture: ['piece'],
+  poids: ['poids'],
+  tissu: ['longueur']
+};
+const PRESET_DEFAULT_UNITS = {
+  liquide: 'ML',
+  carton: 'PIECE',
+  couture: 'PIECE',
+  poids: 'G',
+  tissu: 'CM'
+};
+const SALE_FORMAT_OPTIONS = {
+  liquide: [['ml', 'Millilitre'], ['l', 'Litre'], ['verre', 'Verre'], ['bidon', 'Bidon'], ['bouteille', 'Bouteille'], ['custom', 'Autre format']],
+  carton: [['piece', 'Pièce'], ['carton', 'Carton'], ['paquet', 'Paquet'], ['custom', 'Autre format']],
+  couture: [['piece', 'Pièce'], ['custom', 'Autre format']],
+  poids: [['g', 'Gramme'], ['kg', 'Kilogramme'], ['portion', 'Portion'], ['sac', 'Sac'], ['custom', 'Autre format']],
+  tissu: [['cm', 'Centimètre'], ['m', 'Mètre'], ['rouleau', 'Rouleau'], ['custom', 'Autre format']]
+};
+const PRODUCTS = {
+  {% for p in products %}
+  "{{ p.id }}": {
+    id: {{ p.id }},
+    name: {{ p.name|tojson }},
+    code: {{ p.code|tojson }},
+    base_unit: {{ (p.base_unit.label if p.base_unit else '')|tojson }},
+    base_unit_code: {{ (p.base_unit.code if p.base_unit else '')|tojson }},
+    base_unit_id: {{ p.base_unit_id }},
+    cost_avg: {{ p.cost_avg|default(0)|string|tojson }},
+    currency: {{ p.currency|tojson }},
+    stock: {{ (p.stock_qty|default(0)|float) }},
+    value: {{ p.stock_value|default(0)|string|tojson }},
+    is_perishable: {{ 'true' if p.is_perishable else 'false' }},
+    track_lot: {{ 'true' if p.track_lot else 'false' }},
+    default_expiry: {{ (p.default_expiry_date.strftime('%Y-%m-%d') if p.default_expiry_date else '')|tojson }},
+    shelf_life_days: {{ (p.shelf_life_days if p.shelf_life_days else '')|tojson }},
+    seuil: {{ p.seuil_alerte|default(0)|string|tojson }},
+    pending: {{ (pending_qty.get(p.id, 0)|qty)|string|tojson }},
+    sale_prices: [
+      {% for pu in p.selling_units %}{% if pu.active %}
+      {"id": {{ pu.unit_id }}, "factor": {{ pu.factor|string|tojson }}, "price": {{ pu.prix_vente|string|tojson }}, "default": {{ 'true' if pu.is_sale_default else 'false' }}}{% if not loop.last %},{% endif %}
+      {% endif %}{% endfor %}
+    ],
+    units: [
+      {"id": {{ p.base_unit_id }}, "label": {{ (p.base_unit.label if p.base_unit else '')|tojson }}, "factor": "1", "base": true},
+      {% for pu in p.selling_units %}{% if pu.active and pu.unit_id != p.base_unit_id %}{"id": {{ pu.unit_id }}, "label": {{ pu.unit.label|tojson }}, "factor": {{ pu.factor|string|tojson }}, "base": false, "default": {{ 'true' if pu.is_sale_default else 'false' }}},{% endif %}{% endfor %}
+    ]
+  }{% if not loop.last %},{% endif %}
+  {% endfor %}
+};
+
+function selectProduct(pid) {
+  document.getElementById('product_id').value = pid;
+  document.querySelectorAll('#product_picker .prod-item').forEach(function (el) {
+    el.classList.toggle('selected', el.dataset.id === String(pid));
+  });
+  const p = PRODUCTS[pid];
+  document.getElementById('auto_info').style.display = 'flex';
+  document.getElementById('mod_toggle').style.display = 'block';
+  document.getElementById('field_supplier').style.display = 'block';
+  document.getElementById('field_qty').style.display = 'block';
+  document.getElementById('field_cost').style.display = 'block';
+  document.getElementById('cost').required = true;
+  document.getElementById('quantity').required = true;
+  document.getElementById('quantity').value = '';
+  if (p) {
+    document.getElementById('unit_id').value = p.base_unit_id || '';
+    document.getElementById('cost').value = p.cost_avg || 0;
+    document.getElementById('lot_number').value = '';
+    document.getElementById('expiry_date').value = p.default_expiry || '';
+    document.getElementById('reason').value = 'Réception depuis fiche produit';
+  }
+  document.getElementById('allow_mod').checked = false;
+  document.getElementById('mod_block').classList.remove('active');
+  document.getElementById('m_lot_number').value = '';
+  document.getElementById('m_expiry_date').value = p ? (p.default_expiry || '') : '';
+  document.getElementById('m_cost').value = '';
+  document.getElementById('m_reason').value = '';
+  onProductChange();
+}
+
+function filterProducts() {
+  const q = (document.getElementById('product_search').value || '').trim().toLowerCase();
+  let visible = 0;
+  document.querySelectorAll('#product_picker .prod-item').forEach(function (el) {
+    const ok = !q || (el.dataset.search || '').indexOf(q) !== -1;
+    el.style.display = ok ? '' : 'none';
+    if (ok) visible += 1;
+  });
+  const sum = document.getElementById('picker_summary');
+  sum.textContent = q ? (visible + ' produit(s) trouvé(s)') : (visible + ' produit(s) au total');
+}
+
+function onProductChange() {
+  const pid = document.getElementById('product_id').value;
+  const p = PRODUCTS[pid];
+  const unitSel = document.getElementById('unit_id');
+  unitSel.innerHTML = '';
+  if (!p) {
+    document.getElementById('pv_name').textContent = '— Aucun produit sélectionné —';
+    document.getElementById('pv_code').textContent = '';
+    ['pv_base_unit','pv_cost','pv_stock','pv_value','pv_perishable','pv_expiry','pv_pending','pv_state'].forEach(function(id){
+      document.getElementById(id).textContent = '—';
+    });
+    document.getElementById('pv_units').innerHTML = '';
+    document.getElementById('field_cost').style.display = 'none';
+    document.getElementById('cost').required = false;
+    document.getElementById('existing_cost_hint').textContent = 'Le total et le coût moyen après réception seront calculés ici.';
+    return;
+  }
+  p.units.forEach(function (u) {
+    const option = document.createElement('option');
+    option.value = u.id;
+    option.textContent = u.base ? u.label + ' (unité de base)' : u.label;
+    option.dataset.factor = u.factor;
+    unitSel.appendChild(option);
+  });
+  if (!p.units.some(function (unit) { return unit.base; })) {
+    const baseOption = document.createElement('option');
+    baseOption.value = p.base_unit_id;
+    baseOption.textContent = p.base_unit + ' (unité de base)';
+    baseOption.dataset.factor = '1';
+    unitSel.appendChild(baseOption);
+  }
+  unitSel.value = String(p.base_unit_id);
+  document.getElementById('pv_name').textContent = p.name;
+  document.getElementById('pv_code').textContent = p.code;
+  document.getElementById('pv_base_unit').textContent = p.base_unit + ' (' + p.base_unit_code + ')';
+  document.getElementById('pv_cost').textContent = p.cost_avg + ' ' + p.currency;
+  document.getElementById('pv_stock').textContent = stockText(p);
+  document.getElementById('pv_value').textContent = p.value + ' ' + p.currency;
+  document.getElementById('pv_perishable').textContent = p.is_perishable ? 'Oui' : 'Non';
+  document.getElementById('pv_expiry').textContent = p.is_perishable ? (p.default_expiry || (p.shelf_life_days ? p.shelf_life_days + ' jours' : 'À renseigner')) : '—';
+  document.getElementById('pv_pending').textContent = p.pending;
+  document.getElementById('pv_state').textContent = p.stock > 0 ? 'En stock' : (p.stock < 0 ? 'Rupture' : 'Sans stock');
+  document.getElementById('cost').value = p.cost_avg;
+  onUnitChange();
+  document.getElementById('lot_number').value = '';
+  const sel = document.getElementById('expiry_date');
+  sel.value = p.default_expiry || '';
+  document.getElementById('reason').value = 'Réception depuis fiche produit';
+  if (p.default_expiry) {
+    document.getElementById('m_expiry_date').value = p.default_expiry;
+  }
+
+  const saleUnits = document.getElementById('pv_units');
+  saleUnits.replaceChildren();
+  const heading = document.createElement('div');
+  heading.style.fontWeight = '700';
+  heading.style.fontSize = '.85rem';
+  heading.textContent = 'Prix de vente et marge estimée par format';
+  saleUnits.appendChild(heading);
+  p.units.forEach(function (u) {
+    const sale = p.sale_prices.filter(function (item) { return String(item.id) === String(u.id); })[0];
+    const price = sale ? parseFloat(sale.price || '0') : 0;
+    const cost = parseFloat(p.cost_avg || '0') * parseFloat(u.factor || '1');
+    const margin = price - cost;
+    const priceText = price > 0
+      ? 'Prix vente : ' + fmtNum(price) + ' ' + p.currency + ' · marge estimée : ' + fmtNum(margin) + ' ' + p.currency
+      : 'Prix de vente non défini';
+    const item = document.createElement('div');
+    item.className = 'unit-item';
+    const details = document.createElement('div');
+    const name = document.createElement('div');
+    name.style.fontWeight = '600';
+    name.textContent = u.label;
+    const factor = document.createElement('span');
+    factor.className = 'meta';
+    factor.style.fontSize = '.78rem';
+    factor.style.color = 'var(--muted)';
+    factor.textContent = 'Facteur ' + u.factor;
+    details.appendChild(name);
+    details.appendChild(factor);
+    const priceLabel = document.createElement('span');
+    priceLabel.className = 'price';
+    priceLabel.textContent = priceText;
+    item.appendChild(details);
+    item.appendChild(priceLabel);
+    saleUnits.appendChild(item);
+  });
+  calcFillUnits();
+}
+
+function applyNewPresetType(code) {
+  const base = document.getElementById('new_base_unit_id');
+  const categories = document.getElementById('new_category_id');
+  const saleUnit = document.getElementById('new_unite_vente_id');
+  const allowedKinds = PRESET_UNIT_KINDS[code] || [];
+  base.disabled = !code;
+  categories.disabled = !code;
+  let selectedAllowed = false;
+  Array.from(base.options).forEach(function (option) {
+    if (!option.value) return;
+    const compatible = allowedKinds.includes(option.dataset.unitKind)
+      && option.dataset.code === PRESET_DEFAULT_UNITS[code];
+    option.hidden = !compatible;
+    option.disabled = !compatible;
+    if (option.value === base.value && compatible) selectedAllowed = true;
+  });
+  if (code && !selectedAllowed) {
+    const preferred = Array.from(base.options).find(function (option) {
+      return option.dataset.code === PRESET_DEFAULT_UNITS[code] && !option.disabled;
+    });
+    const first = Array.from(base.options).find(function (option) {
+      return option.value && !option.disabled;
+    });
+    base.value = preferred ? preferred.value : (first ? first.value : '');
+  } else if (!code) {
+    base.value = '';
+  }
+  Array.from(saleUnit.options).forEach(function (option) {
+    if (!option.value) return;
+    const compatible = code && allowedKinds.includes(option.dataset.unitKind) && option.value !== base.value;
+    option.hidden = !compatible;
+    option.disabled = !compatible;
+  });
+  if (saleUnit.selectedOptions.length && saleUnit.selectedOptions[0].disabled) {
+    saleUnit.value = '';
+  }
+  if (code) {
+    while (document.querySelectorAll('#new_sale_unit_rows .sale-unit-row').length < 4) addNewSaleUnit();
+    document.querySelectorAll('#new_sale_unit_rows .sale-unit-row').forEach(function (row) {
+      if (row.dataset.presetType !== code) populateNewSaleUnitRow(row, code);
+    });
+  }
+  document.querySelectorAll('#new_product_block input, #new_product_block select').forEach(function (input) {
+    input.disabled = !document.getElementById('toggle_new_product').checked;
+  });
+  calcFillUnits();
+}
+
+function refreshNewSaleUnitDefaults() {
+  const rows = Array.from(document.querySelectorAll('#new_sale_unit_rows .sale-unit-row'));
+  const qtySelect = document.getElementById('new_qty_unit');
+  const selectedQtyRow = rows.find(function (row) {
+    return qtySelect.value === 'sale:' + row.dataset.formIndex;
+  });
+  const calcSelect = document.getElementById('calc_sale_unit');
+  const selectedCalcRow = rows.find(function (row) {
+    return calcSelect.value === 'sale:' + row.dataset.formIndex;
+  });
+  rows.forEach(function (row, index) {
+    row.querySelector('input[type="radio"]').value = String(index);
+    row.dataset.formIndex = String(index);
+  });
+  if (selectedQtyRow) qtySelect.value = 'sale:' + selectedQtyRow.dataset.formIndex;
+  if (selectedCalcRow) calcSelect.value = 'sale:' + selectedCalcRow.dataset.formIndex;
+  refreshNewReceiptUnits();
+}
+function newSaleUnitFactor(row) {
+  const amount = parseFloat((row.querySelector('[name="new_sale_unit_amount"]').value || '').replace(',', '.'));
+  const type = row.querySelector('[name="new_sale_unit_type"]').value;
+  const measure = row.querySelector('[name="new_sale_unit_measure"]').value;
+  const preset = document.getElementById('new_preset_type').value;
+  const baseCode = PRESET_DEFAULT_UNITS[preset];
+  const factors = {
+    liquide: {ML: {ml: 1, l: 1000}},
+    poids: {G: {g: 1, kg: 1000}},
+    tissu: {CM: {cm: 1, m: 100}}
+  };
+  if (!type || !(amount > 0)) return 0;
+  if (measure === 'base') return amount;
+  if (measure === 'piece') return amount;
+  const factor = factors[preset] && factors[preset][baseCode] && factors[preset][baseCode][measure];
+  return factor ? amount * factor : 0;
+}
+function newSaleUnitLabel(row) {
+  const type = row.querySelector('[name="new_sale_unit_type"]').value;
+  const amount = row.querySelector('[name="new_sale_unit_amount"]').value;
+  const measure = row.querySelector('[name="new_sale_unit_measure"]');
+  const measureLabel = measure.options[measure.selectedIndex] ? measure.options[measure.selectedIndex].textContent : '';
+  const fixed = {ml:'Millilitre', l:'Litre', g:'Gramme', kg:'Kilogramme', cm:'Centimètre', m:'Mètre', piece:'Pièce'};
+  if (fixed[type]) return fixed[type];
+  const labels = {verre:'Verre', bidon:'Bidon', bouteille:'Bouteille', carton:'Carton', paquet:'Paquet', portion:'Portion', sac:'Sac', rouleau:'Rouleau', custom:''};
+  const customName = row.querySelector('[name="new_sale_unit_custom_label"]').value.trim();
+  const name = type === 'custom' ? customName : labels[type];
+  return name ? name + ' ' + amount + ' ' + measureLabel : '';
+}
+function refreshNewReceiptUnits() {
+  const select = document.getElementById('new_qty_unit');
+  if (!select) return;
+  const previous = select.value || 'base';
+  const base = document.getElementById('new_base_unit_id');
+  const baseLabel = base.options[base.selectedIndex] ? base.options[base.selectedIndex].textContent : 'Unité de base';
+  select.innerHTML = '';
+  const baseOption = document.createElement('option');
+  baseOption.value = 'base';
+  baseOption.textContent = baseLabel + ' (unité de stock)';
+  baseOption.dataset.factor = '1';
+  select.appendChild(baseOption);
+  document.querySelectorAll('#new_sale_unit_rows .sale-unit-row').forEach(function (row) {
+    const factor = newSaleUnitFactor(row);
+    const label = newSaleUnitLabel(row);
+    if (!(factor > 0) || !label) return;
+    const option = document.createElement('option');
+    option.value = 'sale:' + row.dataset.formIndex;
+    option.textContent = label;
+    option.dataset.factor = String(factor);
+    select.appendChild(option);
+  });
+  select.value = Array.from(select.options).some(function (option) { return option.value === previous; }) ? previous : 'base';
+  syncNewIntakeCost();
+  calcFillUnits();
+}
+function syncNewIntakeCost() {
+  const costInput = document.getElementById('new_cost_avg');
+  const selected = document.getElementById('new_qty_unit');
+  const factor = selected && selected.options[selected.selectedIndex]
+    ? parseFloat(selected.options[selected.selectedIndex].dataset.factor || '1')
+    : 1;
+  const cost = parseFloat((costInput.value || '0').replace(',', '.')) || 0;
+  document.getElementById('cost').value = String(cost * factor);
+  const option = selected && selected.options[selected.selectedIndex];
+  const quantity = document.getElementById('new_qty_initial');
+  if (quantity && option) {
+    quantity.placeholder = option.value === 'base' ? 'Quantité en unité de stock' : 'Nombre de ' + option.textContent;
+  }
+  const base = document.getElementById('new_base_unit_id');
+  const baseOption = base.options[base.selectedIndex];
+  const quantityValue = parseFloat((quantity.value || '').replace(',', '.')) || 0;
+  const hint = document.getElementById('new_qty_conversion_hint');
+  const totalHint = document.getElementById('new_intake_total_hint');
+  if (quantityValue > 0 && option && baseOption) {
+    const factor = parseFloat(option.dataset.factor || '1');
+    hint.textContent = fmtNum(quantityValue) + ' ' + option.textContent.replace(' (unité de stock)', '')
+      + ' = ' + fmtNum(quantityValue * factor) + ' ' + baseOption.dataset.code + ' dans le stock.';
+    totalHint.textContent = 'Valeur d’achat totale : '
+      + fmtNum(quantityValue * cost * factor) + ' ' + document.getElementById('new_currency').value + '.';
+  } else {
+    hint.textContent = 'La quantité reçue sera convertie dans l’unité de stock.';
+    totalHint.textContent = 'Le coût total de cette réception sera calculé ici.';
+  }
+}
+function newBaseUnitCode() {
+  const select = document.getElementById('new_base_unit_id');
+  const option = select.options[select.selectedIndex];
+  return option && option.dataset.code ? option.dataset.code : 'unité de base';
+}
+function newSaleUnitMeasures(preset, type) {
+  if (preset === 'liquide') return type === 'verre' ? [['ml', 'ml']] : [['ml', 'ml'], ['l', 'L'], ['base', newBaseUnitCode()]];
+  if (preset === 'poids') return [['g', 'g'], ['kg', 'kg'], ['base', newBaseUnitCode()]];
+  if (preset === 'tissu') return [['cm', 'cm'], ['m', 'm'], ['base', newBaseUnitCode()]];
+  if (preset === 'carton' || preset === 'couture') return [['piece', 'pièce(s)'], ['base', newBaseUnitCode()]];
+  return [['base', newBaseUnitCode()]];
+}
+function configureNewSaleUnitRow(select, preserve) {
+  const row = select.closest('.sale-unit-row');
+  const preset = document.getElementById('new_preset_type').value;
+  const type = select.value;
+  const amount = row.querySelector('[name="new_sale_unit_amount"]');
+  const measure = row.querySelector('[name="new_sale_unit_measure"]');
+  const customLabel = row.querySelector('[name="new_sale_unit_custom_label"]');
+  const fixed = {ml: ['1', 'ml'], l: ['1', 'l'], g: ['1', 'g'], kg: ['1', 'kg'], cm: ['1', 'cm'], m: ['1', 'm'], piece: ['1', 'piece']};
+  const oldAmount = preserve ? amount.value : '';
+  const oldMeasure = preserve ? measure.value : '';
+  measure.innerHTML = '';
+  newSaleUnitMeasures(preset, type).forEach(function (item) {
+    const option = document.createElement('option');
+    option.value = item[0];
+    option.textContent = item[1];
+    measure.appendChild(option);
+  });
+  if (fixed[type]) {
+    amount.value = fixed[type][0];
+    amount.readOnly = true;
+    measure.value = fixed[type][1];
+  } else {
+    amount.readOnly = false;
+    amount.value = oldAmount;
+    const preferred = (type === 'bidon' || type === 'bouteille') && preset === 'liquide' ? 'l'
+      : (type === 'sac' || type === 'portion') && preset === 'poids' ? 'kg'
+        : (type === 'rouleau' && preset === 'tissu' ? 'm' : measure.options[0].value);
+    measure.value = oldMeasure && Array.from(measure.options).some(function (option) { return option.value === oldMeasure; })
+      ? oldMeasure
+      : preferred;
+    amount.min = type === 'verre' ? '1' : '0.0001';
+    amount.max = type === 'verre' ? '1000' : '';
+  }
+  row.classList.toggle('is-custom', type === 'custom');
+  customLabel.required = type === 'custom';
+  amount.required = !!type && !fixed[type];
+  row.querySelector('[name="new_sale_unit_price"]').required = !!type;
+  previewNewSaleUnit(amount);
+  refreshNewReceiptUnits();
+}
+function populateNewSaleUnitRow(row, preset) {
+  const select = row.querySelector('[name="new_sale_unit_type"]');
+  select.innerHTML = '<option value="">— Choisir un format —</option>';
+  (SALE_FORMAT_OPTIONS[preset] || []).forEach(function (item) {
+    const option = document.createElement('option');
+    option.value = item[0];
+    option.textContent = item[1];
+    select.appendChild(option);
+  });
+  select.value = '';
+  row.querySelector('[name="new_sale_unit_amount"]').value = '';
+  row.querySelector('[name="new_sale_unit_custom_label"]').value = '';
+  row.querySelector('[name="new_sale_unit_price"]').required = false;
+  row.dataset.presetType = preset;
+  configureNewSaleUnitRow(select, false);
+}
+function previewNewSaleUnit(input) {
+  const row = input.closest('.sale-unit-row');
+  const amount = row.querySelector('[name="new_sale_unit_amount"]').value;
+  const measure = row.querySelector('[name="new_sale_unit_measure"]');
+  const unit = measure.options[measure.selectedIndex];
+  const format = row.querySelector('[name="new_sale_unit_type"]').selectedOptions[0];
+  const type = row.querySelector('[name="new_sale_unit_type"]').value;
+  const preview = row.querySelector('.sale-unit-preview');
+  preview.textContent = type && amount && unit
+    ? 'Au POS : 1 ' + format.textContent.toLowerCase() + ' retire ' + amount + ' ' + unit.textContent + ' du stock.'
+    : '';
+  refreshNewReceiptUnits();
+}
+function addNewSaleUnit() {
+  const row = document.createElement('div');
+  row.className = 'sale-unit-row';
+  row.innerHTML = '<input type="hidden" name="new_sale_unit_id" value="">'
+    + '<div class="field"><label>Format</label><select name="new_sale_unit_type" onchange="configureNewSaleUnitRow(this)"></select></div>'
+    + '<div class="field"><label>Contenu</label><input name="new_sale_unit_amount" inputmode="decimal" placeholder="Ex. 25" oninput="previewNewSaleUnit(this)"></div>'
+    + '<div class="field"><label>Unité du contenu</label><select name="new_sale_unit_measure" onchange="previewNewSaleUnit(this)"></select></div>'
+    + '<div class="field"><label>Prix</label><input name="new_sale_unit_price" inputmode="decimal" placeholder="Ex. 1000"></div>'
+    + '<div class="field sale-unit-actions"><label>POS</label><label><input type="radio" name="new_sale_unit_default" value=""> Par défaut</label><button type="button" class="btn danger sm" onclick="removeNewSaleUnit(this)">Retirer</button></div>'
+    + '<div class="field sale-unit-custom"><label>Nom personnalisé</label><input name="new_sale_unit_custom_label" maxlength="40" placeholder="Ex. Seau" oninput="refreshNewReceiptUnits()"></div>'
+    + '<div class="sale-unit-preview"></div>';
+  document.getElementById('new_sale_unit_rows').appendChild(row);
+  const preset = document.getElementById('new_preset_type').value;
+  if (preset) populateNewSaleUnitRow(row, preset);
+  refreshNewSaleUnitDefaults();
+}
+function removeNewSaleUnit(button) {
+  button.closest('.sale-unit-row').remove();
+  refreshNewSaleUnitDefaults();
+}
+
+function fmtNum(n) {
+  return Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 3 });
+}
+
+function stockText(p) {
+  const base = p.base_unit_code || '';
+  const sale = p.units.filter(function (u) { return !u.base && parseFloat(u.factor) > 0; });
+  const pu = sale.filter(function (u) { return u.default; })[0] || sale[0];
+  if (!pu || p.stock <= 0) return fmtNum(p.stock) + ' ' + base;
+  const f = parseFloat(pu.factor);
+  const count = Math.floor(p.stock / f + 1e-9);
+  const rest = p.stock - count * f;
+  return count + ' ' + pu.label + (rest > 1e-9 ? ' + ' + fmtNum(rest) + ' ' + base : '');
+}
+
+function onUnitChange() {
+  const pid = document.getElementById('product_id').value;
+  const p = PRODUCTS[pid];
+  if (!p) return;
+  const uid = document.getElementById('unit_id').value;
+  const u = p.units.filter(function(x){ return String(x.id) === String(uid); })[0];
+  document.getElementById('cost').value = String(parseFloat(p.cost_avg || '0') * parseFloat(u ? u.factor : '1'));
+  document.getElementById('existing_cost_label').textContent =
+    'Prix d’achat par ' + (u && !u.base ? u.label : (p.base_unit || 'unité de stock')) + ' (' + p.currency + ')';
+  const quantity = document.getElementById('quantity');
+  if (quantity) quantity.placeholder = u && u.base ? 'Quantité en ' + p.base_unit_code : 'Nombre de ' + (u ? u.label : 'unités');
+  updateExistingQtyPreview();
+}
+
+function updateExistingQtyPreview() {
+  const pid = document.getElementById('product_id').value;
+  const p = PRODUCTS[pid];
+  const select = document.getElementById('unit_id');
+  const option = select.options[select.selectedIndex];
+  const quantity = parseFloat((document.getElementById('quantity').value || '').replace(',', '.')) || 0;
+  const hint = document.getElementById('existing_qty_hint');
+  if (!p || !option || quantity <= 0) {
+    hint.textContent = 'La quantité est convertie automatiquement dans l’unité de stock.';
+    document.getElementById('existing_cost_hint').textContent = 'Le total et le coût moyen après réception seront calculés ici.';
+    return;
+  }
+  const factor = parseFloat(option.dataset.factor || '1');
+  const quantityBase = quantity * factor;
+  const unitCost = parseFloat((document.getElementById('cost').value || '0').replace(',', '.')) || 0;
+  const newQuantity = parseFloat(p.stock || '0') + quantityBase;
+  const newAverage = newQuantity > 0
+    ? (parseFloat(p.value || '0') + quantity * unitCost) / newQuantity
+    : 0;
+  hint.textContent = fmtNum(quantity) + ' ' + option.textContent.replace(' (unité de base)', '')
+    + ' = ' + fmtNum(quantityBase) + ' ' + p.base_unit_code + ' dans le stock.';
+  document.getElementById('existing_cost_hint').textContent =
+    'Valeur d’achat de cette entrée : ' + fmtNum(quantity * unitCost) + ' ' + p.currency
+    + ' · coût moyen estimé après réception : ' + fmtNum(newAverage) + ' ' + p.currency
+    + ' / ' + p.base_unit_code + '.';
+}
+
+function toggleMod() {
+  const on = document.getElementById('allow_mod').checked;
+  document.getElementById('mod_block').classList.toggle('active', on);
+}
+
+function toggleNewProduct() {
+  const on = document.getElementById('toggle_new_product').checked;
+  const hasProduct = !!document.getElementById('product_id').value;
+  document.getElementById('new_product_block').style.display = on ? 'block' : 'none';
+  document.getElementById('product_id').disabled = on;
+  document.getElementById('product_search').disabled = on;
+  document.getElementById('product_picker').style.opacity = on ? '0.45' : '1';
+  document.getElementById('product_picker').style.pointerEvents = on ? 'none' : 'auto';
+  document.getElementById('auto_info').style.display = (!on && hasProduct) ? 'flex' : 'none';
+  document.getElementById('mod_toggle').style.display = (!on && hasProduct) ? 'block' : 'none';
+  document.getElementById('field_supplier').style.display = on || hasProduct ? 'block' : 'none';
+  document.getElementById('field_qty').style.display = (!on && hasProduct) ? 'block' : 'none';
+  document.getElementById('field_cost').style.display = (!on && hasProduct) ? 'block' : 'none';
+  document.getElementById('cost').required = !on && hasProduct;
+  document.getElementById('quantity').required = !on && hasProduct;
+  document.getElementById('new_product_name').required = on;
+  document.getElementById('new_preset_type').required = on;
+  document.getElementById('new_category_id').required = on;
+  document.getElementById('new_base_unit_id').required = on;
+  document.getElementById('new_qty_initial').required = on;
+  document.getElementById('mod_block').classList.remove('active');
+  document.getElementById('allow_mod').checked = false;
+  applyNewPresetType(document.getElementById('new_preset_type').value);
+  document.querySelectorAll('#new_product_block input, #new_product_block select').forEach(function (input) {
+    input.disabled = !on;
+  });
+  calcFillUnits();
+}
+
+function openDirect() {
+  const creating = document.getElementById('toggle_new_product') && document.getElementById('toggle_new_product').checked;
+  if (!creating && !document.getElementById('product_id').value) {
+    alert('Sélectionnez un produit, ou cochez « Créer un nouveau produit ».');
+    return;
+  }
+  document.getElementById('direct_modal_title').textContent = 'Confirmer l’entrée en stock';
+  document.getElementById('direct_modal_message').textContent = 'L’entrée modifie le stock immédiatement. Saisissez le mot de passe d’un propriétaire ou d’un administrateur.';
+  document.getElementById('direct_modal_submit').textContent = 'Confirmer et entrer en stock';
+  document.getElementById('direct_password').value = '';
+  document.getElementById('direct_modal').classList.add('show');
+  setTimeout(function () { document.getElementById('direct_password').focus(); }, 50);
+}
+
+function closeDirect() {
+  document.getElementById('direct_modal').classList.remove('show');
+}
+
+function submitDirect() {
+  const pwd = document.getElementById('direct_password').value;
+  if (!pwd) { alert('Saisissez le mot de passe.'); return; }
+  document.getElementById('owner_password_field').value = pwd;
+  document.getElementById('direct_flag').value = '1';
+  document.getElementById('entry_form').requestSubmit();
+}
+
+async function checkDuplicateBeforeSubmit(event) {
+  const form = document.getElementById('entry_form');
+  if (
+    document.getElementById('direct_flag').value === '1'
+    || document.getElementById('duplicate_check_done').value === '1'
+    || (document.getElementById('toggle_new_product') && document.getElementById('toggle_new_product').checked)
+    || !document.getElementById('product_id').value
+  ) return;
+  event.preventDefault();
+  const submitButtons = form.querySelectorAll('button[type="submit"]');
+  submitButtons.forEach(function (button) { button.disabled = true; });
+  try {
+    const response = await fetch('{{ url_for("stock.check_entry_duplicate") }}', {
+      method: 'POST',
+      body: new FormData(form),
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Vérification du doublon impossible.');
+    if (result.duplicate) {
+      document.getElementById('direct_modal_title').textContent = 'Approvisionnement identique détecté';
+      document.getElementById('direct_modal_message').textContent =
+        'Une entrée similaire (' + result.reference + ') existe déjà aujourd’hui. Pour confirmer un nouvel approvisionnement, saisissez le mot de passe d’un administrateur.';
+      document.getElementById('direct_modal_submit').textContent = 'Confirmer le nouvel approvisionnement';
+      document.getElementById('direct_password').value = '';
+      document.getElementById('direct_modal').classList.add('show');
+      setTimeout(function () { document.getElementById('direct_password').focus(); }, 50);
+      return;
+    }
+    document.getElementById('duplicate_check_done').value = '1';
+    form.requestSubmit();
+  } catch (error) {
+    alert(error.message || 'Vérification du doublon impossible.');
+  } finally {
+    submitButtons.forEach(function (button) { button.disabled = false; });
+  }
+}
+
+function calcFillUnits() {
+  const sel = document.getElementById('calc_sale_unit');
+  const previous = sel.value;
+  sel.innerHTML = '';
+  const creating = document.getElementById('toggle_new_product') && document.getElementById('toggle_new_product').checked;
+  const p = PRODUCTS[document.getElementById('product_id').value];
+  let units = [];
+  if (!creating && p) {
+    units = p.units;
+  } else {
+    const base = document.getElementById('new_base_unit_id');
+    const opt = base ? base.options[base.selectedIndex] : null;
+    const label = (opt && opt.value) ? opt.textContent.replace(/ \(.*\)$/, '') : 'Unité de stock';
+    units = [{ id: (opt && opt.value) ? opt.value : '', label: label, factor: '1', base: true }];
+    if (creating) {
+      document.querySelectorAll('#new_sale_unit_rows .sale-unit-row').forEach(function (row) {
+        const factor = newSaleUnitFactor(row);
+        const unitLabel = newSaleUnitLabel(row);
+        if (factor > 0 && unitLabel) {
+          units.push({
+            id: 'sale:' + row.dataset.formIndex,
+            label: unitLabel,
+            factor: String(factor),
+            base: false,
+            default: row.querySelector('[name="new_sale_unit_default"]').checked
+          });
+        }
+      });
+    }
+  }
+  units.forEach(function (u) {
+    const o = document.createElement('option');
+    o.value = u.id;
+    o.dataset.factor = u.factor;
+    o.textContent = u.label + (u.base ? ' (stock)' : '');
+    if (u.default) o.selected = true;
+    sel.appendChild(o);
+  });
+  if (Array.from(sel.options).some(function (option) { return option.value === previous; })) {
+    sel.value = previous;
+  }
+  calcRun();
+}
+
+function calcRun() {
+  const num = function (id) { return parseFloat((document.getElementById(id).value || '').replace(',', '.')) || 0; };
+  const qty = num('calc_qty');
+  const pack = num('calc_pack');
+  const total = num('calc_total');
+  const price = num('calc_price');
+  const sel = document.getElementById('calc_sale_unit');
+  const opt = sel.options[sel.selectedIndex];
+  const factor = opt ? (parseFloat(opt.dataset.factor) || 1) : 1;
+  const label = opt ? opt.textContent.replace(' (stock)', '') : 'unité';
+  const out = document.getElementById('calc_out');
+  out.dataset.cost = '';
+  out.dataset.qty = '';
+  const baseQty = qty * pack;
+  if (baseQty <= 0 || total <= 0) {
+    out.textContent = 'Saisissez le nombre de colis, leur contenu et le prix d\'achat.';
+    return;
+  }
+  const costBase = total / baseQty;
+  const costSale = costBase * factor;
+  const nbSale = Math.floor(baseQty / factor + 1e-9);
+  const lines = [
+    'Coût par unité de stock : ' + fmtNum(costBase),
+    'Coût par ' + label + ' : ' + fmtNum(costSale),
+    'Nombre de ' + label + ' : ' + nbSale,
+  ];
+  if (price > 0) {
+    const margin = price - costSale;
+    const pct = margin * 100 / price;
+    lines.push('Marge par ' + label + ' : ' + fmtNum(margin) + ' (' + pct.toFixed(1) + ' %)' + (margin < 0 ? ' — VENTE À PERTE' : ''));
+    lines.push('Marge potentielle sur tout le stock : ' + fmtNum(margin * nbSale));
+  }
+  out.textContent = '';
+  lines.forEach(function (l) {
+    const d = document.createElement('div');
+    d.textContent = l;
+    out.appendChild(d);
+  });
+  out.dataset.cost = costBase;
+  out.dataset.qty = baseQty;
+}
+
+function calcApply() {
+  const out = document.getElementById('calc_out');
+  if (!out.dataset.cost) { alert('Complétez le calcul avant de l\'appliquer.'); return; }
+  const creating = document.getElementById('toggle_new_product') && document.getElementById('toggle_new_product').checked;
+  if (creating) {
+    document.getElementById('new_cost_avg').value = Number(out.dataset.cost).toFixed(2);
+    document.getElementById('new_qty_initial').value = out.dataset.qty;
+    document.getElementById('new_qty_unit').value = 'base';
+    syncNewIntakeCost();
+  } else {
+    if (!document.getElementById('product_id').value) { alert('Sélectionnez un produit.'); return; }
+    const p = PRODUCTS[document.getElementById('product_id').value];
+    document.getElementById('unit_id').value = p.base_unit_id;
+    onUnitChange();
+    document.getElementById('cost').value = Number(out.dataset.cost).toFixed(2);
+    document.getElementById('quantity').value = out.dataset.qty;
+  }
+  const done = document.createElement('div');
+  done.textContent = '✔ Appliqué au formulaire d\'entrée.';
+  done.style.fontWeight = '700';
+  out.appendChild(done);
+}
+
+function calcNewCost() {
+  const q = parseFloat((document.getElementById('new_qty_initial').value || '0').replace(',', '.')) || 0;
+  const t = parseFloat((document.getElementById('new_total_achat').value || '0').replace(',', '.')) || 0;
+  if (q > 0 && t > 0) {
+    const c = t / q;
+    document.getElementById('new_cost_avg').value = c.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  }
+}
+function applyQuickMeasure() {
+  const v = document.getElementById('quick_measure').value;
+  if (v) {
+    document.getElementById('new_qty_initial').value = v;
+    calcNewCost();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('entry_form').addEventListener('submit', checkDuplicateBeforeSubmit);
+  filterProducts();
+  const newBase = document.getElementById('new_base_unit_id');
+  if (newBase) newBase.addEventListener('change', function () {
+    applyNewPresetType(document.getElementById('new_preset_type').value);
+  });
+  calcFillUnits();
+  syncNewIntakeCost();
+});
+</script>
+{% endblock %}

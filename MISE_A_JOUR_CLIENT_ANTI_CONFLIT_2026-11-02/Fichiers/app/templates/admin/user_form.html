@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Nouvel utilisateur{% endblock %}
+{% block heading %}Nouvel utilisateur{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Créer un compte</h2>
+  <p class="sub">Le mot de passe devra être changé par l'utilisateur à sa première connexion.</p>
+
+  <form method="post" action="{{ url_for('admin.user_new') }}" class="form-narrow">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field">
+      <label for="username">Nom d'utilisateur</label>
+      <input type="text" id="username" name="username" required autofocus>
+    </div>
+    <div class="field">
+      <label for="full_name">Nom complet</label>
+      <input type="text" id="full_name" name="full_name" required>
+    </div>
+    <div class="field">
+      <label for="password">Mot de passe provisoire</label>
+      <input type="password" id="password" name="password" required>
+      <p class="hint">8 caractères minimum.</p>
+    </div>
+    <div class="field">
+      <label for="role_id">Rôle</label>
+      <select id="role_id" name="role_id">
+        <option value="">— Sans rôle —</option>
+        {% for r in roles %}
+        <option value="{{ r.id }}">{{ r.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="row">
+      <button type="submit" class="btn">Créer l'utilisateur</button>
+      <a href="{{ url_for('admin.users') }}" class="btn ghost">Annuler</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

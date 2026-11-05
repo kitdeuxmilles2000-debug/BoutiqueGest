@@ -30,7 +30,7 @@ foreach ($directory in @("app", "migrations")) {
 
 $installerFiles = Join-Path $FilesPath "installer"
 New-Item -ItemType Directory -Force -Path $installerFiles | Out-Null
-foreach ($file in @("start_app.bat", "create_shortcut.ps1", "Register-BackupTask.ps1", "icon.ico")) {
+foreach ($file in @("start_app.bat", "create_shortcut.ps1", "Register-BackupTask.ps1", "install.ps1", "INSTALL.bat", "check_python.ps1", "icon.ico")) {
     $source = Join-Path $ProjectRoot "installer\$file"
     if (-not (Test-Path $source)) {
         throw "Fichier source introuvable : $source"

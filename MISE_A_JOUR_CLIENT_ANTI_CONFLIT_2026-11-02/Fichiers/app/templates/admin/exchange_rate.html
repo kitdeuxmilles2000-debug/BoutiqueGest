@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Taux de change{% endblock %}
+{% block heading %}Taux de change USD → CDF{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="card kpi">
+    <span class="label">Taux courant</span>
+    <span class="value accent">{{ latest.rate if latest else '—' }}</span>
+    <span class="foot">1 USD = {{ latest.rate if latest else '—' }} CDF</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Date d'effet</span>
+    <span class="value">{{ latest.effective_date.strftime('%d/%m/%Y') if latest else '—' }}</span>
+    <span class="foot">Dernière mise à jour</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Source</span>
+    <span class="value" style="font-size:1rem">{{ latest.source or '—' }}</span>
+    <span class="foot">Provenance du taux</span>
+  </div>
+  <div class="card kpi">
+    <span class="label">Historique</span>
+    <span class="value">{{ history | length }}</span>
+    <span class="foot">Taux enregistrés</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Saisir un taux</h2>
+  <p class="sub">Taux saisi <strong>manuellement</strong> et <strong>historique</strong>. Aucun montant n'est
+    converti automatiquement : CDF et USD restent comptés séparément ; le taux sert à l'affichage et aux vues consolidées.</p>
+  <form method="post" action="{{ url_for('admin.exchange_rate') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid cols-3">
+      <label>Taux (1 USD = X CDF)
+        <input type="text" name="rate" inputmode="decimal" placeholder="ex. 2800" required>
+      </label>
+      <label>Date d'effet
+        <input type="date" name="effective_date">
+      </label>
+      <label>Source
+        <input type="text" name="source" placeholder="ex. marché, banque">
+      </label>
+    </div>
+    <label>Notes
+      <input type="text" name="notes" placeholder="facultatif">
+    </label>
+    <div class="mt-16">
+      <button class="btn">Enregistrer le taux</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Historique des taux</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Date d'effet</th><th>Taux (CDF)</th><th>Source</th><th>Par</th><th>Créé le</th></tr>
+      </thead>
+      <tbody>
+        {% for rate in history %}
+        <tr>
+          <td>{{ rate.effective_date.strftime('%d/%m/%Y') }}</td>
+          <td><strong>{{ rate.rate }}</strong></td>
+          <td>{{ rate.source or '—' }}</td>
+          <td>{{ rate.created_by.full_name if rate.created_by else '—' }}</td>
+          <td>{{ rate.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted">Aucun taux enregistré.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
