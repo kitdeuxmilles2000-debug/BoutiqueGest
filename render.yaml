@@ -21,7 +21,7 @@ services:
       - key: GITHUB_SYNC_ENABLED
         value: "1"
       - key: GITHUB_SYNC_REPOSITORY
-        sync: false
+        value: kitdeuxmilles2000-debug/BoutiqueGest
       - key: GITHUB_SYNC_TOKEN
         sync: false
       - key: GITHUB_SYNC_BRANCH

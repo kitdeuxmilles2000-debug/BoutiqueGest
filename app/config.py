@@ -93,7 +93,7 @@ class Config:
     CLOUD_READ_ONLY = os.environ.get("CLOUD_READ_ONLY", "0") == "1"
 
     # Synchronisation des données métier via un fichier privé sur une branche GitHub dédiée.
-    GITHUB_SYNC_REPOSITORY = os.environ.get("GITHUB_SYNC_REPOSITORY", "") or _detect_github_repo()
+    GITHUB_SYNC_REPOSITORY = os.environ.get("GITHUB_SYNC_REPOSITORY", "").strip() or _detect_github_repo() or "kitdeuxmilles2000-debug/BoutiqueGest"
     GITHUB_SYNC_TOKEN = os.environ.get("GITHUB_SYNC_TOKEN", "").strip() or os.environ.get("GH_TOKEN", "").strip()
     GITHUB_SYNC_BRANCH = os.environ.get("GITHUB_SYNC_BRANCH", "boutiquegest-data")
     GITHUB_SYNC_PATH = os.environ.get(
