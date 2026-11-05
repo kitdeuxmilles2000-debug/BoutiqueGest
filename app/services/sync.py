@@ -449,22 +449,21 @@ def stats():
     except (TypeError, ValueError):
         last_total = 0
 
-    github_configured = bool(
-        current_app.config.get("GITHUB_SYNC_ENABLED")
-        and current_app.config.get("GITHUB_SYNC_REPOSITORY")
-        and current_app.config.get("GITHUB_SYNC_TOKEN")
-    )
+    github_repo = current_app.config.get("GITHUB_SYNC_REPOSITORY")
+    github_token = current_app.config.get("GITHUB_SYNC_TOKEN")
+    github_enabled = bool(current_app.config.get("GITHUB_SYNC_ENABLED") and github_repo)
+    github_configured = bool(github_enabled and (github_token or True))  # git fallback available
     legacy_configured = bool(
         current_app.config.get("SYNC_ENABLED")
         and current_app.config.get("SYNC_REMOTE_URL")
         and current_app.config.get("SYNC_API_TOKEN")
     )
+    transport = "GitHub (API)" if (github_enabled and github_token) else ("GitHub (git)" if github_enabled else "Render")
     return {
         "configured": github_configured or legacy_configured,
-        "transport": "GitHub" if current_app.config.get("GITHUB_SYNC_ENABLED") else "Render",
+        "transport": transport,
         "receiver_configured": bool(
-            not current_app.config.get("GITHUB_SYNC_ENABLED")
-            and current_app.config.get("SYNC_API_TOKEN")
+            not github_enabled and current_app.config.get("SYNC_API_TOKEN")
         ),
         "last_snapshot_at": last_snapshot,
         "last_error": current_app.extensions.get("github_sync_error") or last_error,

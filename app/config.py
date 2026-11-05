@@ -7,6 +7,9 @@ INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
 DEFAULT_DB_PATH = os.path.join(INSTANCE_DIR, "boutiquegest.db")
 
 
+import subprocess
+
+
 def _database_uri():
     database_url = os.environ.get("DATABASE_URL")
     if database_url:
@@ -26,6 +29,35 @@ def _int_env(name, default):
         return int(os.environ.get(name, default))
     except (TypeError, ValueError):
         return default
+
+
+def _detect_github_repo():
+    """Détecte automatiquement le dépôt GitHub depuis git remote origin."""
+    repo = os.environ.get("GITHUB_SYNC_REPOSITORY", "").strip()
+    if repo:
+        return repo
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=BASE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            url = result.stdout.strip()
+            # https://github.com/owner/repo.git or git@github.com:owner/repo.git
+            for prefix in ("https://github.com/", "http://github.com/", "git@github.com:"):
+                if url.startswith(prefix):
+                    path = url[len(prefix):]
+                    if path.endswith(".git"):
+                        path = path[:-4]
+                    parts = path.strip("/").split("/")
+                    if len(parts) >= 2:
+                        return f"{parts[0]}/{parts[1]}"
+    except Exception:
+        pass
+    return ""
 
 
 class Config:
@@ -61,14 +93,20 @@ class Config:
     CLOUD_READ_ONLY = os.environ.get("CLOUD_READ_ONLY", "0") == "1"
 
     # Synchronisation des données métier via un fichier privé sur une branche GitHub dédiée.
-    GITHUB_SYNC_ENABLED = os.environ.get("GITHUB_SYNC_ENABLED", "0") == "1"
-    GITHUB_SYNC_REPOSITORY = os.environ.get("GITHUB_SYNC_REPOSITORY", "")
-    GITHUB_SYNC_TOKEN = os.environ.get("GITHUB_SYNC_TOKEN", "")
+    GITHUB_SYNC_REPOSITORY = os.environ.get("GITHUB_SYNC_REPOSITORY", "") or _detect_github_repo()
+    GITHUB_SYNC_TOKEN = os.environ.get("GITHUB_SYNC_TOKEN", "").strip() or os.environ.get("GH_TOKEN", "").strip()
     GITHUB_SYNC_BRANCH = os.environ.get("GITHUB_SYNC_BRANCH", "boutiquegest-data")
     GITHUB_SYNC_PATH = os.environ.get(
         "GITHUB_SYNC_PATH", "sync/boutiquegest-snapshot.json.gz"
     )
     GITHUB_SYNC_POLL_SECONDS = _int_env("GITHUB_SYNC_POLL_SECONDS", 30)
+    # Auto-enable if repository is detected; API token enables direct API sync,
+    # otherwise git fallback is used (requires git with credentials configured).
+    _github_explicit = os.environ.get("GITHUB_SYNC_ENABLED")
+    if _github_explicit is not None:
+        GITHUB_SYNC_ENABLED = _github_explicit == "1"
+    else:
+        GITHUB_SYNC_ENABLED = bool(GITHUB_SYNC_REPOSITORY)
 
     # E-mails (rapport journalier) : optionnel, sinon les messages restent en file
     SMTP_HOST = os.environ.get("SMTP_HOST", "")

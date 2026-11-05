@@ -3,6 +3,10 @@ import base64
 import gzip
 import io
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
@@ -33,6 +37,18 @@ def _parse_datetime(value):
     return parsed
 
 
+def _git_repo_url(repo):
+    return f"https://github.com/{repo}.git"
+
+
+def _git_fallback_available():
+    try:
+        result = subprocess.run(["git", "--version"], capture_output=True, timeout=5)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def _settings():
     repo = current_app.config.get("GITHUB_SYNC_REPOSITORY", "").strip()
     token = current_app.config.get("GITHUB_SYNC_TOKEN", "").strip()
@@ -40,13 +56,20 @@ def _settings():
     path = current_app.config.get(
         "GITHUB_SYNC_PATH", "sync/boutiquegest-snapshot.json.gz"
     ).strip()
-    if not current_app.config.get("GITHUB_SYNC_ENABLED") or not repo or not token:
+    enabled = current_app.config.get("GITHUB_SYNC_ENABLED")
+    if enabled is None:
+        # Auto-enable if repo detected
+        enabled = bool(repo)
+    if not enabled or not repo:
         return None
     if len(repo.split("/")) != 2 or not all(repo.split("/")):
         raise ValueError("GITHUB_SYNC_REPOSITORY doit être au format propriétaire/dépôt.")
     if not branch or not path:
         raise ValueError("La branche et le chemin du fichier GitHub sont obligatoires.")
-    return repo, token, branch, path
+    mode = "api" if token else ("git" if _git_fallback_available() else None)
+    if mode is None:
+        return None
+    return repo, token, branch, path, mode
 
 
 def _api_request(method, endpoint, token, payload=None):
@@ -103,14 +126,127 @@ def _assert_private_repository(repo, token):
     return repository
 
 
+def _git_env():
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
+def _git_run(args, cwd, check=True):
+    result = subprocess.run(
+        ["git"] + args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env=_git_env(),
+    )
+    if check and result.returncode != 0:
+        msg = (result.stderr or result.stdout or "").strip()[:500]
+        raise RuntimeError(f"Git: {msg}")
+    return result
+
+
+def _git_read_snapshot(settings):
+    repo, token, branch, path, mode = settings
+    tmp = tempfile.mkdtemp(prefix="bg_sync_")
+    try:
+        repo_url = _git_repo_url(repo)
+        # Try clone branch; if it doesn't exist, return None
+        clone = _git_run(["clone", "--depth", "1", "--branch", branch, repo_url, tmp], cwd=tempfile.gettempdir(), check=False)
+        if clone.returncode != 0:
+            # Branch might not exist yet
+            return None, [], None
+        file_path = os.path.join(tmp, *path.split("/"))
+        if not os.path.exists(file_path):
+            return None, [], None
+        with open(file_path, "rb") as f:
+            compressed = f.read()
+        with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as stream:
+            content = stream.read(100 * 1024 * 1024 + 1)
+        if len(content) > 100 * 1024 * 1024:
+            raise ValueError("Instantané GitHub décompressé trop volumineux.")
+        document = json.loads(content.decode("utf-8"))
+        if (
+            not isinstance(document, dict)
+            or document.get("format") != "boutiquegest-snapshot-v1"
+            or not isinstance(document.get("snapshot"), dict)
+            or not isinstance(document.get("tombstones", []), list)
+        ):
+            raise ValueError("Format d'instantané GitHub invalide.")
+        snapshot_sync._validate_snapshot(
+            document["snapshot"], snapshot_sync._models_by_table()
+        )
+        tombstones = _validate_tombstones(document.get("tombstones", []))
+        # Get HEAD sha as reference
+        sha_res = _git_run(["rev-parse", "HEAD"], cwd=tmp)
+        sha = sha_res.stdout.strip()
+        return document["snapshot"], tombstones, sha
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _git_write_snapshot(settings, snapshot, tombstones, sha):
+    repo, token, branch, path, mode = settings
+    document = {
+        "format": "boutiquegest-snapshot-v1",
+        "updated_at": utcnow().isoformat(),
+        "snapshot": snapshot,
+        "tombstones": tombstones,
+    }
+    content = gzip.compress(
+        json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    )
+    if len(content) > MAX_SNAPSHOT_BYTES:
+        raise RuntimeError(
+            "L'instantané compressé dépasse la limite de 900 Ko de synchronisation GitHub."
+        )
+    tmp = tempfile.mkdtemp(prefix="bg_sync_")
+    try:
+        repo_url = _git_repo_url(repo)
+        # Try to clone branch; if not exists, create it
+        clone = _git_run(["clone", "--depth", "1", "--branch", branch, repo_url, tmp], cwd=tempfile.gettempdir(), check=False)
+        if clone.returncode != 0:
+            # Clone default and create branch
+            _git_run(["clone", "--depth", "1", repo_url, tmp], cwd=tempfile.gettempdir())
+            # Try to create orphan branch
+            _git_run(["checkout", "--orphan", branch], cwd=tmp, check=False)
+            _git_run(["rm", "-rf", "."], cwd=tmp, check=False)
+        else:
+            _git_run(["checkout", branch], cwd=tmp, check=False)
+        file_path = os.path.join(tmp, *path.split("/"))
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as f:
+            f.write(content)
+        _git_run(["add", path], cwd=tmp)
+        # Check if there are changes
+        status = _git_run(["status", "--porcelain"], cwd=tmp)
+        if not status.stdout.strip():
+            return {"commit": {"sha": sha or "no-change"}, "skipped": True}
+        _git_run(["-c", "user.name=BoutiqueGest", "-c", "user.email=sync@local", "commit", "-m", "Synchronisation automatique des données BoutiqueGest"], cwd=tmp)
+        push = _git_run(["push", "origin", branch], cwd=tmp, check=False)
+        if push.returncode != 0:
+            # Try to pull and retry (simple conflict handling)
+            _git_run(["pull", "--rebase", "origin", branch], cwd=tmp, check=False)
+            push2 = _git_run(["push", "origin", branch], cwd=tmp, check=False)
+            if push2.returncode != 0:
+                raise RuntimeError(f"Git push échoué: {(push2.stderr or push2.stdout)[:300]}")
+        sha_res = _git_run(["rev-parse", "HEAD"], cwd=tmp)
+        return {"commit": {"sha": sha_res.stdout.strip()}}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _read_snapshot(settings):
-    repo, token, branch, path = settings
+    repo, token, branch, path, mode = settings
+    if mode == "git":
+        return _git_read_snapshot(settings)
     _assert_private_repository(repo, token)
     response = _api_request(
         "GET", _contents_endpoint(repo, path, branch), token
     )
     if response is None:
-        return None, None
+        return None, [], None
     try:
         if not isinstance(response, dict) or not response.get("sha"):
             raise ValueError("Métadonnées du fichier GitHub absentes.")
@@ -163,7 +299,9 @@ def _ensure_branch(repo, token, branch):
 
 
 def _write_snapshot(settings, snapshot, tombstones, sha):
-    repo, token, branch, path = settings
+    repo, token, branch, path, mode = settings
+    if mode == "git":
+        return _git_write_snapshot(settings, snapshot, tombstones, sha)
     document = {
         "format": "boutiquegest-snapshot-v1",
         "updated_at": utcnow().isoformat(),
@@ -252,7 +390,7 @@ def _validate_tombstones(tombstones):
 
 def _merge_tombstones(*groups):
     latest = {}
-    for tombstone in (item for group in groups for item in group):
+    for tombstone in (item for group in groups for item in (group or [])):
         key = (tombstone["table"], tombstone["uuid"])
         current = latest.get(key)
         if current is None or _parse_datetime(tombstone["deleted_at"]) > _parse_datetime(
