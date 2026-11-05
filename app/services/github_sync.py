@@ -604,6 +604,21 @@ def sync_now():
         return {"ok": False, "configured": True, "error": str(exc)}
 
 
+def _github_sync_active(app):
+    """True if GitHub sync can run (API token or git fallback)."""
+    if not app.config.get("GITHUB_SYNC_ENABLED"):
+        return False
+    if not app.config.get("GITHUB_SYNC_REPOSITORY"):
+        return False
+    if app.config.get("GITHUB_SYNC_TOKEN"):
+        return True
+    # git fallback
+    try:
+        return _git_fallback_available()
+    except Exception:
+        return False
+
+
 def register_automatic_sync(app):
     """Actualise périodiquement depuis GitHub et republie après les écritures HTTP."""
     app.extensions["github_sync_lock"] = threading.Lock()
@@ -614,11 +629,7 @@ def register_automatic_sync(app):
 
     @app.before_request
     def pull_github_changes():
-        if (
-            not app.config.get("GITHUB_SYNC_ENABLED")
-            or not app.config.get("GITHUB_SYNC_TOKEN")
-            or not app.config.get("GITHUB_SYNC_REPOSITORY")
-        ):
+        if not _github_sync_active(app):
             return None
         if app.config.get("GITHUB_SYNC_SKIP_PULL", False):
             return None
@@ -654,11 +665,10 @@ def register_automatic_sync(app):
     def push_github_changes(response):
         read_only_request = request_method_is_read_only()
         should_push = (
-            not read_only_request or app.extensions["github_sync_pending_push"]
+            not read_only_request or app.extensions.get("github_sync_pending_push", False)
         )
         if (
-            not app.config.get("GITHUB_SYNC_ENABLED")
-            or not app.config.get("GITHUB_SYNC_TOKEN")
+            not _github_sync_active(app)
             or not should_push
             or response.status_code >= 400
             or request.endpoint == "admin.sync_process"
@@ -677,7 +687,7 @@ def register_automatic_sync(app):
             outcome = sync_now()
             app.extensions["github_sync_error"] = outcome.get("error", "")
             if not outcome.get("ok"):
-                app.logger.error("Échec de la publication des données sur GitHub : %s", outcome["error"])
+                app.logger.error("Échec de la publication des données sur GitHub : %s", outcome.get("error"))
         return response
 
 
