@@ -57,6 +57,7 @@
   .invoice-table tbody td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
   .invoice-table tbody tr:nth-child(even) { background: #f8fafc; }
   .invoice-table .line-name { font-weight: 600; }
+  .invoice-table .line-code { font-size: .76rem; color: var(--muted); }
   .invoice-table .line-unit { font-size: .76rem; color: var(--muted); }
   .invoice-table .qty-cell { white-space: nowrap; }
   .invoice-table .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -112,7 +113,7 @@
         <div class="units">
           {% for pu in entry.units %}
           <button type="button" class="unit-btn"
-            data-product-id="{{ p.id }}" data-name="{{ p.name }}"
+            data-product-id="{{ p.id }}" data-name="{{ p.name }}" data-code="{{ p.code }}"
             data-unit-id="{{ pu.unit_id }}" data-unit-label="{{ pu.unit.label }}"
             data-prix="{{ pu.prix_vente }}" data-factor="{{ pu.factor }}"
             data-cost="{{ p.cost_avg * pu.factor }}" data-target="{{ entry.target }}"
@@ -242,7 +243,7 @@ function addToCart(btn) {
   const existing = cart.find(l => l.key === key);
   if (existing) { existing.quantity += 1; }
   else {
-    cart.push({ key, id: ++seq, product_id: Number(d.productId), name: d.name,
+    cart.push({ key, id: ++seq, product_id: Number(d.productId), name: d.name, code: d.code,
       unit_id: Number(d.unitId), unit_label: d.unitLabel, prix: Number(d.prix), quantity: 1,
       cost: Number(d.cost), target: Number(d.target) });
   }
@@ -307,6 +308,7 @@ function render() {
       <tr>
         <td>
           <div class="line-name">${escapeHtml(l.name)}</div>
+          <div class="line-code"><code>${escapeHtml(l.code)}</code></div>
           <div class="line-unit">${escapeHtml(l.unit_label)} ${marginBadge(l)}</div>
         </td>
         <td class="num qty-cell">

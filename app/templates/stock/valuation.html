@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_macros.html" import show_pager %}
+{% block title %}Valorisation du stock{% endblock %}
+{% block heading %}Valorisation du stock{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Rapport détaillé des valeurs du stock</h2>
+      <p class="sub">
+        Le coût utilise le coût moyen pondéré. La valeur de vente utilise le prix actif par défaut du format de vente.
+        {% if rate %}Taux actuel : 1 USD = {{ rate.rate }} CDF ({{ rate.effective_date.strftime('%d/%m/%Y') }}).
+        {% else %}Aucun taux de change n'est saisi : les conversions entre CDF et USD sont masquées.{% endif %}
+        {% if unconverted_currencies %}Les produits en {{ unconverted_currencies | join(', ') }} restent affichés dans leur devise d'origine.{% endif %}
+      </p>
+    </div>
+    {% if current_user.has_permission(P.SETTINGS_MANAGE) %}
+    <a class="btn ghost sm" href="{{ url_for('admin.exchange_rate') }}">Paramétrer le taux de change</a>
+    {% endif %}
+  </div>
+
+  {% if converted_totals %}
+  <div class="grid cols-2">
+    {% for currency, totals in converted_totals.items() %}
+    <div class="card kpi">
+      <span class="label">Total en {{ currency }}</span>
+      <span class="value">{{ totals.cost_value | num }} {{ currency }}</span>
+      <span class="foot">Au coût d'achat · valeur de vente : {{ totals.sale_value | num }} {{ currency }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Devise d'origine</th><th>Valeur au coût d'achat</th><th>Valeur au prix de vente</th></tr></thead>
+      <tbody>
+        {% for currency, totals in native_totals.items() %}
+        <tr><td>{{ currency }}</td><td>{{ totals.cost_value | num }} {{ currency }}</td><td>{{ totals.sale_value | num }} {{ currency }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" class="muted">Aucun produit actif.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Détail par produit</h2>
+      <p class="sub">{{ pager.total }} produit(s) actif(s). Les produits sans prix de vente restent valorisés au coût d'achat.</p>
+    </div>
+    <button class="btn ghost sm" onclick="window.print()">Imprimer / PDF</button>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Code</th><th>Produit</th><th>Quantité</th><th>Coût moyen unitaire</th>
+          <th>Valeur au coût d'achat</th><th>Prix de vente unitaire</th><th>Valeur au prix de vente</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        {% set product = row.product %}
+        <tr>
+          <td><code>{{ product.code }}</code></td>
+          <td>{{ product.name }}</td>
+          <td class="num">{{ row.quantity | qty }} {{ product.base_unit.code if product.base_unit else '' }}</td>
+          <td class="num">{{ product.cost_avg | num }} {{ row.currency }}</td>
+          <td class="num">
+            {{ row.cost_value | num }} {{ row.currency }}
+            {% if rate and row.cost_cdf is not none and row.currency != 'CDF' %}<br><span class="muted">{{ row.cost_cdf | num }} CDF</span>{% endif %}
+            {% if rate and row.cost_usd is not none and row.currency != 'USD' %}<br><span class="muted">{{ row.cost_usd | num }} USD</span>{% endif %}
+          </td>
+          <td class="num">
+            {% if row.sale_unit %}{{ row.sale_unit.prix_vente | num }} {{ row.currency }} / {{ row.sale_unit.unit.label }}
+            {% else %}<span class="muted">Non défini</span>{% endif %}
+          </td>
+          <td class="num">
+            {% if row.sale_value is not none %}
+              {{ row.sale_value | num }} {{ row.currency }}
+              {% if rate and row.sale_cdf is not none and row.currency != 'CDF' %}<br><span class="muted">{{ row.sale_cdf | num }} CDF</span>{% endif %}
+              {% if rate and row.sale_usd is not none and row.currency != 'USD' %}<br><span class="muted">{{ row.sale_usd | num }} USD</span>{% endif %}
+            {% else %}<span class="muted">Non défini</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">Aucun produit actif.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ show_pager(pager) }}
+</div>
+{% endblock %}

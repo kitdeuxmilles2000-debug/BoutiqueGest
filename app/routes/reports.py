@@ -9,6 +9,7 @@ from flask_login import login_required
 from app.security.decorators import permission_required
 from app.security.permissions import P
 from app.services import reports as reports_service
+from app.services import settings as settings_service
 from app.services.reports import PERIODE_LABELS
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/rapports")
@@ -29,6 +30,10 @@ def _build_context():
     debut, fin = reports_service.period_bounds(periode)
 
     ventes = reports_service.ventes_summary(debut, fin)
+    rate = settings_service.latest_rate()
+    sales_currency_summary = reports_service.sales_currency_summary(
+        debut, fin, rate.rate if rate else None
+    )
     achats = reports_service.achats_summary(debut, fin)
     charges, expenses = reports_service.charges_summary(debut, fin)
     par_nature, par_devise = reports_service.tresorerie_summary(debut, fin)
@@ -43,6 +48,8 @@ def _build_context():
         "debut": debut,
         "fin": fin,
         "ventes": ventes,
+        "sales_currency_summary": sales_currency_summary,
+        "rate": rate,
         "achats": achats,
         "charges": charges,
         "expenses": expenses,
@@ -89,6 +96,33 @@ def export_csv():
             cur, v["count"], str(v["ca"]), str(v["cout"]), str(v["marge"]),
             str(v["taux_marge"]) if v["taux_marge"] is not None else "",
         ])
+    writer.writerow([])
+
+    writer.writerow(["CHIFFRE D'AFFAIRES CONVERTI AU TAUX COURANT"])
+    writer.writerow([
+        "Taux courant",
+        f"1 USD = {ctx['rate'].rate} CDF" if ctx["rate"] else "Non renseigne",
+    ])
+    writer.writerow(["Devise cible", "CA"])
+    for cur, amount in ctx["sales_currency_summary"]["totals"].items():
+        writer.writerow([cur, str(amount)])
+    if not ctx["sales_currency_summary"]["totals"]:
+        reason = (
+            "Aucune vente CDF/USD a convertir"
+            if ctx["rate"]
+            else "Aucun taux de change renseigne"
+        )
+        writer.writerow(["Conversion indisponible", reason])
+    writer.writerow([])
+
+    writer.writerow(["CHIFFRE D'AFFAIRES JOURNALIER CDF/USD"])
+    writer.writerow([
+        "Mode",
+        "Conversion au taux courant" if ctx["rate"] else "Montants natifs; aucune conversion",
+    ])
+    writer.writerow(["Date", "CDF", "USD"])
+    for row in ctx["sales_currency_summary"]["daily"]:
+        writer.writerow([row["date"].strftime("%d/%m/%Y"), str(row["CDF"]), str(row["USD"])])
     writer.writerow([])
 
     writer.writerow(["ACHATS RECUS"])

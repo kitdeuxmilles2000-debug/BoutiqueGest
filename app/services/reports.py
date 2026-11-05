@@ -96,6 +96,60 @@ def ventes_summary(debut, fin):
     return totals
 
 
+def sales_currency_summary(debut, fin, rate=None):
+    """Consolide les ventes CDF/USD avec le taux courant, et par jour."""
+    rate = dec(rate) if rate is not None else None
+    rate = rate if rate and rate > 0 else None
+    totals = {"CDF": Decimal("0"), "USD": Decimal("0")}
+    daily = {}
+    unconverted_currencies = set()
+    supported_sales = 0
+
+    for sale in _sales_in(debut, fin):
+        amount = dec(sale.montant_total)
+        if sale.currency == "CDF":
+            supported_sales += 1
+            bucket = daily.setdefault(
+                sale.created_at.date(), {"CDF": Decimal("0"), "USD": Decimal("0")}
+            )
+            bucket["CDF"] += amount
+            if rate:
+                bucket["USD"] += amount / rate
+        elif sale.currency == "USD":
+            supported_sales += 1
+            bucket = daily.setdefault(
+                sale.created_at.date(), {"CDF": Decimal("0"), "USD": Decimal("0")}
+            )
+            bucket["USD"] += amount
+            if rate:
+                bucket["CDF"] += amount * rate
+        else:
+            unconverted_currencies.add(sale.currency)
+
+    daily_rows = [
+        {
+            "date": day,
+            "CDF": values["CDF"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+            "USD": values["USD"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        }
+        for day, values in sorted(daily.items())
+    ]
+    if rate and supported_sales:
+        for row in daily_rows:
+            totals["CDF"] += row["CDF"]
+            totals["USD"] += row["USD"]
+        return {
+            "totals": totals,
+            "daily": daily_rows,
+            "unconverted_currencies": sorted(unconverted_currencies),
+        }
+    return {
+        "totals": {},
+        "daily": daily_rows,
+        "unconverted_currencies": sorted(unconverted_currencies),
+    }
+
+
 def achats_summary(debut, fin):
     """Total des achats effectivement réceptionnés sur la période, par devise."""
     purchases = (

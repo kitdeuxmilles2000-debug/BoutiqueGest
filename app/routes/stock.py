@@ -27,6 +27,7 @@ from app.security.owner import find_admin_by_password
 from app.security.permissions import P
 from app.services.pagination import paginate, paginate_list
 from app.services import pricing as pricing_service
+from app.services import settings as settings_service
 from app.services import stock as stock_service
 from app.services import stock_validation as stock_validation_service
 from app.services.stock import dec
@@ -54,6 +55,27 @@ def index():
         stock_totals=stock_totals,
         product_margins=product_margins,
         product_count=len(products),
+    )
+
+
+@stock_bp.route("/valorisation")
+@login_required
+@permission_required(P.STOCK_VIEW)
+def valuation():
+    products = _active_products()
+    rate = settings_service.latest_rate()
+    rows, native_totals, converted_totals = stock_service.stock_valuation_report(
+        products, rate.rate if rate else None
+    )
+    pager = paginate_list(rows)
+    return render_template(
+        "stock/valuation.html",
+        rows=pager.items,
+        pager=pager,
+        native_totals=native_totals,
+        converted_totals=converted_totals,
+        unconverted_currencies=sorted(set(native_totals) - {"CDF", "USD"}),
+        rate=rate,
     )
 
 

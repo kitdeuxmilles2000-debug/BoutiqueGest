@@ -55,7 +55,11 @@
     </div>
   </div>
   <p class="sub mt-16">Periode : du {{ debut.strftime('%d/%m/%Y') }} au {{ (fin).strftime('%d/%m/%Y') }}.
-    Les montants sont **separes par devise** (CDF / USD jamais melanges).</p>
+    Les ventes d'origine restent séparées par devise. Les équivalents CDF/USD sont indicatifs et calculés au taux courant.
+    {% if rate %}Taux utilisé : 1 USD = {{ rate.rate }} CDF ({{ rate.effective_date.strftime('%d/%m/%Y') }}).
+    {% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.exchange_rate') }}">Saisir un taux de change</a> pour afficher les conversions.
+    {% else %}Les conversions seront affichées lorsqu'un taux de change aura été renseigné.{% endif %}
+  </p>
 </div>
 
 <div class="grid cols-4">
@@ -84,6 +88,21 @@
   <div class="card kpi"><span class="label">Aucune activite</span><span class="value muted">—</span><span class="foot">Sur la periode choisie</span></div>
   {% endif %}
 </div>
+
+{% if sales_currency_summary.totals %}
+<div class="grid cols-2">
+  {% for currency, amount in sales_currency_summary.totals.items() %}
+  <div class="card kpi">
+    <span class="label">Chiffre d'affaires converti · {{ currency }}</span>
+    <span class="value accent">{{ amount | num }} {{ currency }}</span>
+    <span class="foot">Ventes CDF et USD converties au taux courant</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if sales_currency_summary.unconverted_currencies %}
+<div class="card"><p class="sub">Les ventes en {{ sales_currency_summary.unconverted_currencies | join(', ') }} ne sont pas incluses dans les conversions CDF/USD.</p></div>
+{% endif %}
 
 <div class="grid cols-3">
   <div class="card">
@@ -204,19 +223,28 @@
   </div>
 
   <div class="card">
-    <h2>Ventes CDF par jour</h2>
-    {% if serie %}
-      {% set maxv = serie | map(attribute=1) | max %}
-      {% for d, amount in serie %}
+    <h2>Ventes par jour en CDF</h2>
+    {% set daily_cdf = sales_currency_summary.daily | map(attribute='CDF') | list %}
+    {% set max_cdf = daily_cdf | max if daily_cdf else 0 %}
+    {% for row in sales_currency_summary.daily %}
       <div class="mini">
-        <span class="lbl">{{ d.strftime('%d/%m') }}</span>
-        <span class="bar" style="flex:1"><span style="width: {{ (amount / maxv * 100) if maxv else 0 }}%"></span></span>
-        <span class="val">{{ amount | num }}</span>
+        <span class="lbl">{{ row.date.strftime('%d/%m') }}</span>
+        <span class="bar" style="flex:1"><span style="width: {{ (row.CDF / max_cdf * 100) if max_cdf else 0 }}%"></span></span>
+        <span class="val">{{ row.CDF | num }}</span>
       </div>
-      {% endfor %}
-    {% else %}
-    <p class="muted">Aucune vente CDF sur la periode.</p>
-    {% endif %}
+    {% else %}<p class="muted">Aucune vente CDF/USD sur la période.</p>
+    {% endfor %}
+    <h2 class="mt-16">Ventes par jour en USD</h2>
+    {% set daily_usd = sales_currency_summary.daily | map(attribute='USD') | list %}
+    {% set max_usd = daily_usd | max if daily_usd else 0 %}
+    {% for row in sales_currency_summary.daily %}
+    <div class="mini">
+      <span class="lbl">{{ row.date.strftime('%d/%m') }}</span>
+      <span class="bar" style="flex:1"><span style="width: {{ (row.USD / max_usd * 100) if max_usd else 0 }}%"></span></span>
+      <span class="val">{{ row.USD | num }}</span>
+    </div>
+    {% endfor %}
+    {% if not rate %}<p class="sub">Sans taux, chaque série n'inclut que les ventes encaissées dans sa devise d'origine.</p>{% endif %}
   </div>
 </div>
 {% endblock %}

@@ -159,6 +159,86 @@ def stock_financial_summary(products):
     return totals, product_margins
 
 
+def stock_valuation_report(products, rate=None):
+    """Prepare les valeurs du stock au cout moyen et au prix de vente courant."""
+    rate = dec(rate) if rate is not None else None
+    rows = []
+    native_totals = {}
+    currencies = set()
+
+    for product in products:
+        currency = product.currency or "CDF"
+        currencies.add(currency)
+        quantity = dec(product.stock_qty)
+        cost_value = dec(product.stock_value)
+        sale_units = [
+            unit
+            for unit in product.selling_units
+            if (
+                unit.active
+                and unit.currency == currency
+                and dec(unit.factor) > 0
+                and dec(unit.prix_vente) > 0
+            )
+        ]
+        sale_unit = next((unit for unit in sale_units if unit.is_sale_default), None)
+        sale_unit = sale_unit or (sale_units[0] if sale_units else None)
+        sale_value = None
+        if sale_unit is not None:
+            sale_value = quantity * dec(sale_unit.prix_vente) / dec(sale_unit.factor)
+
+        row = {
+            "product": product,
+            "quantity": quantity,
+            "currency": currency,
+            "cost_value": cost_value,
+            "sale_value": sale_value,
+            "sale_unit": sale_unit,
+            "cost_cdf": None,
+            "cost_usd": None,
+            "sale_cdf": None,
+            "sale_usd": None,
+        }
+        for kind, amount in (("cost", cost_value), ("sale", sale_value)):
+            if amount is None:
+                continue
+            if currency == "CDF":
+                row[f"{kind}_cdf"] = amount
+                if rate and rate > 0:
+                    row[f"{kind}_usd"] = (amount / rate).quantize(Decimal("0.01"))
+            elif currency == "USD":
+                row[f"{kind}_usd"] = amount
+                if rate and rate > 0:
+                    row[f"{kind}_cdf"] = (amount * rate).quantize(Decimal("0.01"))
+
+        totals = native_totals.setdefault(
+            currency, {"cost_value": Decimal("0"), "sale_value": Decimal("0")}
+        )
+        totals["cost_value"] += cost_value
+        if sale_value is not None:
+            totals["sale_value"] += sale_value
+        rows.append(row)
+
+    converted_totals = {}
+    if currencies and currencies.issubset({"CDF", "USD"}):
+        display_currencies = (
+            ("CDF", "USD") if rate and rate > 0 else tuple(currencies)
+        )
+        if rate and rate > 0 or len(currencies) == 1:
+            for currency in display_currencies:
+                converted_totals[currency] = {
+                    "cost_value": Decimal("0"),
+                    "sale_value": Decimal("0"),
+                }
+            for row in rows:
+                for currency in display_currencies:
+                    converted_totals[currency]["cost_value"] += row[f"cost_{currency.lower()}"] or Decimal("0")
+                    if row["sale_value"] is not None:
+                        converted_totals[currency]["sale_value"] += row[f"sale_{currency.lower()}"] or Decimal("0")
+
+    return rows, native_totals, converted_totals
+
+
 def apply_inventory_validation(session, user_id, reason=None):
     """Applique les ecarts d'un inventaire valide sous forme de mouvements."""
     created = 0

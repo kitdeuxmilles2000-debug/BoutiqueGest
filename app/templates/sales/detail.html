@@ -29,7 +29,7 @@
     <tbody>
       {% for l in sale.lines %}
       <tr>
-        <td>{{ l.product.name }}<br><span class="pill">{{ l.unit.label if l.unit else '' }}</span></td>
+        <td>{{ l.product.name }}<br><code class="pill">{{ l.product.code }}</code> <span class="pill">{{ l.unit.label if l.unit else '' }}</span></td>
         <td>{{ l.quantity | qty }}</td>
         <td>{{ l.prix_unitaire | num }}</td>
         <td>{{ l.line_total | num }}</td>

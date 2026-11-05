@@ -58,6 +58,7 @@
       <p class="sub">{{ product_count }} produit(s) actif(s). Valeur et marges calculées séparément par devise, au coût moyen et au prix du format de vente par défaut.</p>
     </div>
     <div class="toolbar">
+      <a href="{{ url_for('stock.valuation') }}" class="btn ghost sm">Rapport d?taill? des valeurs</a>
       {% if current_user.has_permission(P.STOCK_MANAGE) %}<a href="{{ url_for('stock.entry') }}" class="btn sm">+ Entrée / Créer un produit</a>{% endif %}
     {% if current_user.has_permission(P.LOSS_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Déclarer une perte</a>{% endif %}
     {% if current_user.has_permission(P.INVENTORY_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Inventaire</a>{% endif %}
