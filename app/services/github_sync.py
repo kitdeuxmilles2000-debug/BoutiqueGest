@@ -80,9 +80,13 @@ def _settings():
         raise ValueError("GITHUB_SYNC_REPOSITORY doit être au format propriétaire/dépôt.")
     if not branch or not path:
         raise ValueError("La branche et le chemin du fichier GitHub sont obligatoires.")
-    mode = "api" if token else ("git" if _git_fallback_available() else None)
-    if mode is None:
-        return None
+    if token:
+        mode = "api"
+    elif _git_fallback_available():
+        mode = "git"
+    else:
+        # Public repo: API reads work without token (writes require token)
+        mode = "api"
     return repo, token, branch, path, mode
 
 
@@ -520,12 +524,14 @@ def pull_snapshot():
     set_setting("sync.last_error", "")
     set_setting("sync.last_total", str(result["total"]))
     db.session.commit()
+    # On display-only instances, never signal a push
+    pending = (tombstones != remote_tombstones) and _github_sync_push_enabled(current_app)
     return {
         "ok": True,
         "configured": True,
         "found": True,
         "result": result,
-        "pending_push": tombstones != remote_tombstones,
+        "pending_push": pending,
     }
 
 
@@ -614,11 +620,21 @@ def _github_sync_active(app):
         return False
     if app.config.get("GITHUB_SYNC_TOKEN"):
         return True
-    # git fallback
+    # git fallback (public read / local write)
     try:
         return _git_fallback_available()
     except Exception:
+        # Even without git, API read can work for public repos without token
+        return True
+
+
+def _github_sync_push_enabled(app):
+    """Disable pushes on display-only/cloud instances to avoid overwriting the source snapshot."""
+    if app.config.get("GITHUB_SYNC_PULL_ONLY", False):
         return False
+    if app.config.get("CLOUD_READ_ONLY", False):
+        return False
+    return True
 
 
 def register_automatic_sync(app):
@@ -665,6 +681,8 @@ def register_automatic_sync(app):
 
     @app.after_request
     def push_github_changes(response):
+        if not _github_sync_push_enabled(app):
+            return response
         read_only_request = request_method_is_read_only()
         should_push = (
             not read_only_request or app.extensions.get("github_sync_pending_push", False)
