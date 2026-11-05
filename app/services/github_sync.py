@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from flask import current_app, request
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.config import BASE_DIR
 from app.extensions import db
 from app.models.base import utcnow
 from app.models.user import get_setting, set_setting
@@ -38,6 +39,19 @@ def _parse_datetime(value):
 
 
 def _git_repo_url(repo):
+    # Prefer the configured remote URL from local repo if it matches
+    try:
+        local = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=5,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+        if local.returncode == 0 and local.stdout.strip():
+            url = local.stdout.strip()
+            if repo in url or "github.com" in url:
+                return url
+    except Exception:
+        pass
     return f"https://github.com/{repo}.git"
 
 
@@ -129,6 +143,7 @@ def _assert_private_repository(repo, token):
 def _git_env():
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
+    env.setdefault("GCM_INTERACTIVE", "Never")
     return env
 
 
@@ -138,7 +153,7 @@ def _git_run(args, cwd, check=True):
         cwd=cwd,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=180,
         env=_git_env(),
     )
     if check and result.returncode != 0:
@@ -152,11 +167,19 @@ def _git_read_snapshot(settings):
     tmp = tempfile.mkdtemp(prefix="bg_sync_")
     try:
         repo_url = _git_repo_url(repo)
-        # Try clone branch; if it doesn't exist, return None
-        clone = _git_run(["clone", "--depth", "1", "--branch", branch, repo_url, tmp], cwd=tempfile.gettempdir(), check=False)
-        if clone.returncode != 0:
+        # Clone local repo first (no network), then fetch data branch from remote
+        local_clone = _git_run(["clone", "--no-hardlinks", BASE_DIR, tmp], cwd=tempfile.gettempdir(), check=False)
+        if local_clone.returncode != 0:
+            # Fallback: clone directly from remote
+            _git_run(["clone", "--depth", "1", repo_url, tmp], cwd=tempfile.gettempdir())
+        # Ensure origin points to GitHub
+        _git_run(["remote", "set-url", "origin", repo_url], cwd=tmp, check=False)
+        # Fetch the data branch
+        fetch = _git_run(["fetch", "origin", branch], cwd=tmp, check=False)
+        if fetch.returncode != 0:
             # Branch might not exist yet
             return None, [], None
+        _git_run(["checkout", "-B", branch, f"origin/{branch}"], cwd=tmp, check=False)
         file_path = os.path.join(tmp, *path.split("/"))
         if not os.path.exists(file_path):
             return None, [], None
@@ -178,13 +201,11 @@ def _git_read_snapshot(settings):
             document["snapshot"], snapshot_sync._models_by_table()
         )
         tombstones = _validate_tombstones(document.get("tombstones", []))
-        # Get HEAD sha as reference
         sha_res = _git_run(["rev-parse", "HEAD"], cwd=tmp)
         sha = sha_res.stdout.strip()
         return document["snapshot"], tombstones, sha
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-
 
 def _git_write_snapshot(settings, snapshot, tombstones, sha):
     repo, token, branch, path, mode = settings
@@ -204,38 +225,41 @@ def _git_write_snapshot(settings, snapshot, tombstones, sha):
     tmp = tempfile.mkdtemp(prefix="bg_sync_")
     try:
         repo_url = _git_repo_url(repo)
-        # Try to clone branch; if not exists, create it
-        clone = _git_run(["clone", "--depth", "1", "--branch", branch, repo_url, tmp], cwd=tempfile.gettempdir(), check=False)
-        if clone.returncode != 0:
-            # Clone default and create branch
+        # Clone local repo first, set remote to GitHub
+        local_clone = _git_run(["clone", "--no-hardlinks", BASE_DIR, tmp], cwd=tempfile.gettempdir(), check=False)
+        if local_clone.returncode != 0:
             _git_run(["clone", "--depth", "1", repo_url, tmp], cwd=tempfile.gettempdir())
-            # Try to create orphan branch
+        _git_run(["remote", "set-url", "origin", repo_url], cwd=tmp, check=False)
+        # Try to fetch and checkout data branch
+        fetch = _git_run(["fetch", "origin", branch], cwd=tmp, check=False)
+        if fetch.returncode == 0:
+            _git_run(["checkout", "-B", branch, f"origin/{branch}"], cwd=tmp, check=False)
+        else:
+            # Create orphan branch for data
             _git_run(["checkout", "--orphan", branch], cwd=tmp, check=False)
             _git_run(["rm", "-rf", "."], cwd=tmp, check=False)
-        else:
-            _git_run(["checkout", branch], cwd=tmp, check=False)
         file_path = os.path.join(tmp, *path.split("/"))
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb") as f:
             f.write(content)
-        _git_run(["add", path], cwd=tmp)
-        # Check if there are changes
+        _git_run(["add", "-A"], cwd=tmp)
         status = _git_run(["status", "--porcelain"], cwd=tmp)
         if not status.stdout.strip():
             return {"commit": {"sha": sha or "no-change"}, "skipped": True}
         _git_run(["-c", "user.name=BoutiqueGest", "-c", "user.email=sync@local", "commit", "-m", "Synchronisation automatique des données BoutiqueGest"], cwd=tmp)
-        push = _git_run(["push", "origin", branch], cwd=tmp, check=False)
+        push = _git_run(["push", "origin", f"HEAD:{branch}"], cwd=tmp, check=False)
         if push.returncode != 0:
-            # Try to pull and retry (simple conflict handling)
-            _git_run(["pull", "--rebase", "origin", branch], cwd=tmp, check=False)
-            push2 = _git_run(["push", "origin", branch], cwd=tmp, check=False)
+            # Retry once: fetch, rebase/reset, push
+            _git_run(["fetch", "origin", branch], cwd=tmp, check=False)
+            _git_run(["rebase", f"origin/{branch}"], cwd=tmp, check=False)
+            push2 = _git_run(["push", "origin", f"HEAD:{branch}"], cwd=tmp, check=False)
             if push2.returncode != 0:
-                raise RuntimeError(f"Git push échoué: {(push2.stderr or push2.stdout)[:300]}")
+                err = (push2.stderr or push2.stdout or push.stderr or "").strip()[:400]
+                raise RuntimeError(f"Git push échoué: {err}")
         sha_res = _git_run(["rev-parse", "HEAD"], cwd=tmp)
         return {"commit": {"sha": sha_res.stdout.strip()}}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-
 
 def _read_snapshot(settings):
     repo, token, branch, path, mode = settings
