@@ -57,7 +57,7 @@
   <p class="sub mt-16">Periode : du {{ debut.strftime('%d/%m/%Y') }} au {{ (fin).strftime('%d/%m/%Y') }}.
     Les ventes d'origine restent séparées par devise. Les équivalents CDF/USD sont indicatifs et calculés au taux courant.
     {% if rate %}Taux utilisé : 1 USD = {{ rate.rate }} CDF ({{ rate.effective_date.strftime('%d/%m/%Y') }}).
-    {% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.exchange_rate') }}">Saisir un taux de change</a> pour afficher les conversions.
+    {% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.settings') }}">Saisir un taux de change</a> (Paramètres) pour afficher les conversions.
     {% else %}Les conversions seront affichées lorsqu'un taux de change aura été renseigné.{% endif %}
   </p>
 </div>
@@ -66,22 +66,22 @@
   {% for cur, v in ventes.items() %}
   <div class="card kpi">
     <span class="label">CA net · {{ cur }}</span>
-    <span class="value accent">{{ v.ca | num }}</span>
-    <span class="foot">{{ v.count }} vente(s) · marge brute {{ v.marge | num }} {{ cur }}{% if v.taux_marge is not none %} ({{ v.taux_marge | num }} % du CA){% endif %}</span>
+    <span class="value accent">{{ v.ca | num }} {{ cur }}</span>
+    <span class="foot">{{ v.count }} vente(s) · marge {{ v.marge | num }} {{ cur }}{% if rate and rate.rate and cur == 'CDF' %} · ≈ {{ (v.ca / rate.rate) | round(2) }} ${% elif rate and rate.rate and cur == 'USD' %} · ≈ {{ (v.ca * rate.rate) | round(2) }} FC{% endif %}</span>
   </div>
   {% endfor %}
   {% for cur, achat in achats.items() %}
   <div class="card kpi">
     <span class="label">Achats reçus · {{ cur }}</span>
-    <span class="value">{{ achat.total | num }}</span>
-    <span class="foot">{{ achat.count }} achat(s) réceptionné(s) sur la période</span>
+    <span class="value">{{ achat.total | num }} {{ cur }}</span>
+    <span class="foot">{{ achat.count }} achat(s){% if rate and rate.rate and cur == 'CDF' %} · ≈ {{ (achat.total / rate.rate) | round(2) }} ${% elif rate and rate.rate and cur == 'USD' %} · ≈ {{ (achat.total * rate.rate) | round(2) }} FC{% endif %}</span>
   </div>
   {% endfor %}
   {% for cur, r in resultat.items() %}
   <div class="card kpi">
-    <span class="label">Resultat estime · {{ cur }}</span>
-    <span class="value {{ 'good' if r.resultat >= 0 else 'bad' }}">{{ r.resultat | num }}</span>
-    <span class="foot">marge {{ r.marge | num }} − charges {{ r.charges | num }}</span>
+    <span class="label">Résultat estimé · {{ cur }}</span>
+    <span class="value {{ 'good' if r.resultat >= 0 else 'bad' }}">{{ r.resultat | num }} {{ cur }}</span>
+    <span class="foot">marge {{ r.marge | num }} − charges {{ r.charges | num }}{% if rate and rate.rate and cur == 'CDF' %} · ≈ {{ (r.resultat / rate.rate) | round(2) }} ${% elif rate and rate.rate and cur == 'USD' %} · ≈ {{ (r.resultat * rate.rate) | round(2) }} FC{% endif %}</span>
   </div>
   {% endfor %}
   {% if not ventes and not resultat %}
@@ -109,12 +109,17 @@
     <h2>Achats reçus par devise</h2>
     <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>Devise</th><th>Nombre</th><th>Total reçu</th></tr></thead>
+        <thead><tr><th>Devise</th><th>Nombre</th><th>Total reçu</th><th>Équivalent ($ / FC)</th></tr></thead>
         <tbody>
           {% for cur, achat in achats.items() %}
-          <tr><td><span class="badge blue">{{ cur }}</span></td><td>{{ achat.count }}</td><td>{{ achat.total | num }}</td></tr>
+          <tr>
+            <td><span class="badge blue">{{ cur }}</span></td>
+            <td>{{ achat.count }}</td>
+            <td>{{ achat.total | num }} {{ cur }}</td>
+            <td>{% if rate and rate.rate and cur == 'CDF' %}≈ {{ (achat.total / rate.rate) | round(2) }} ${% elif rate and rate.rate and cur == 'USD' %}≈ {{ (achat.total * rate.rate) | round(2) }} FC{% else %}—{% endif %}</td>
+          </tr>
           {% else %}
-          <tr><td colspan="3" class="muted">Aucun achat réceptionné sur la période.</td></tr>
+          <tr><td colspan="4" class="muted">Aucun achat réceptionné sur la période.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -142,12 +147,16 @@
     <h2>Charges (depenses validees)</h2>
     <div class="table-wrap">
       <table class="table">
-        <thead><tr><th>Devise</th><th>Total charges</th></tr></thead>
+        <thead><tr><th>Devise</th><th>Total charges</th><th>Équivalent ($ / FC)</th></tr></thead>
         <tbody>
           {% for cur, total in charges.items() %}
-          <tr><td><span class="badge amber">{{ cur }}</span></td><td>{{ total | num }}</td></tr>
+          <tr>
+            <td><span class="badge amber">{{ cur }}</span></td>
+            <td>{{ total | num }} {{ cur }}</td>
+            <td>{% if rate and rate.rate and cur == 'CDF' %}≈ {{ (total / rate.rate) | round(2) }} ${% elif rate and rate.rate and cur == 'USD' %}≈ {{ (total * rate.rate) | round(2) }} FC{% else %}—{% endif %}</td>
+          </tr>
           {% else %}
-          <tr><td colspan="2" class="muted">Aucune charge validee.</td></tr>
+          <tr><td colspan="3" class="muted">Aucune charge validee.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -184,7 +193,7 @@
             <tr>
               <td>{{ movement_labels.get(kind, kind) }}</td>
               <td><span class="pill">{{ cur }}</span></td>
-              <td style="font-weight:700;color:{{ 'var(--success)' if amount >= 0 else 'var(--danger)' }}">{{ '+' if amount >= 0 }}{{ amount | num }}</td>
+              <td style="font-weight:700;color:{{ 'var(--success)' if amount >= 0 else 'var(--danger)' }}">{{ '+' if amount >= 0 }}{{ amount | num }} {{ cur }}{% if rate and rate.rate and cur == 'CDF' %} <span class="muted" style="font-weight:400">(≈ {{ (amount / rate.rate) | round(2) }} $)</span>{% elif rate and rate.rate and cur == 'USD' %} <span class="muted" style="font-weight:400">(≈ {{ (amount * rate.rate) | round(2) }} FC)</span>{% endif %}</td>
             </tr>
             {% endfor %}
           {% else %}
@@ -195,7 +204,7 @@
     </div>
     <div class="mt-16">
       {% for cur, total in tresorerie_devise.items() %}
-      <div class="mini"><span class="lbl">Net {{ cur }}</span><span class="val {{ 'good' if total >= 0 else 'bad' }}">{{ total | num }}</span></div>
+      <div class="mini"><span class="lbl">Net {{ cur }}</span><span class="val {{ 'good' if total >= 0 else 'bad' }}">{{ total | num }} {{ cur }}{% if rate and rate.rate and cur == 'CDF' %} <span class="muted" style="font-weight:400">(≈ {{ (total / rate.rate) | round(2) }} $)</span>{% elif rate and rate.rate and cur == 'USD' %} <span class="muted" style="font-weight:400">(≈ {{ (total * rate.rate) | round(2) }} FC)</span>{% endif %}</span></div>
       {% endfor %}
     </div>
   </div>

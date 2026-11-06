@@ -45,6 +45,8 @@ class SnapshotSyncTests(unittest.TestCase):
             WTF_CSRF_ENABLED=False,
             SYNC_API_TOKEN=token,
             CLOUD_READ_ONLY=read_only,
+            GITHUB_SYNC_ENABLED=False,
+            GITHUB_SYNC_SKIP_PULL=True,
         )
         with app.app_context():
             db.create_all()

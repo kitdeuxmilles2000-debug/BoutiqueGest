@@ -7,7 +7,7 @@
   <div class="card-head">
     <div>
       <h2>Dépenses</h2>
-      <p class="sub">{{ expenses|length }} dépense(s) affichée(s).</p>
+      <p class="sub">{{ expenses|length }} dépense(s) affichée(s). {% set xr = exchange_rate or rate %}{% if xr %}Taux : 1 USD = {{ xr.rate }} CDF — montants affichés en $ et en FC. <a href="{{ url_for('admin.settings') }}">Paramètres</a>{% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.settings') }}">Paramètres</a> : configurez le taux pour voir les équivalents $/FC.{% endif %}</p>
     </div>
     <div class="toolbar">
       {% if current_user.has_permission(P.EXPENSES_CREATE) %}<a href="{{ url_for('expenses.new') }}" class="btn sm">+ Nouvelle dépense</a>{% endif %}
@@ -34,7 +34,7 @@
           <td>{{ e.motif }}</td>
           <td>{{ e.category.name if e.category else '—' }}</td>
           <td>{{ e.beneficiary or '—' }}</td>
-          <td>{{ e.amount | num }} {{ e.currency }}</td>
+          <td>{{ e.amount | num }} {{ e.currency }}{% set xr = exchange_rate or rate %}{% if xr and e.currency == 'CDF' %} <span class="muted">(≈ {{ (e.amount / xr.rate) | round(2) }} $)</span>{% elif xr and e.currency == 'USD' %} <span class="muted">(≈ {{ (e.amount * xr.rate) | round(2) }} FC)</span>{% endif %}</td>
           <td>
             {% if e.status == 'validee' %}<span class="badge green">Validee</span>
             {% elif e.status == 'en_attente' %}<span class="badge amber">En attente</span>

@@ -50,6 +50,7 @@ def index():
     if not _can_view_all():
         query = query.filter_by(vendeur_id=current_user.id)
     pager = paginate(query.order_by(CashSession.opened_at.desc()))
+    rate = settings_service.latest_rate()
 
     return render_template(
         "cash/index.html",
@@ -58,6 +59,7 @@ def index():
         pager=pager,
         sessions=pager.items,
         labels=CASH_SESSION_STATUS_LABELS,
+        rate=rate,
     )
 
 
@@ -121,6 +123,7 @@ def session_detail(session_id):
         Sale.query.filter_by(cash_session_id=session.id).order_by(Sale.created_at.desc()),
         key="spage",
     )
+    rate = settings_service.latest_rate()
     return render_template(
         "cash/session.html",
         session=session,
@@ -131,6 +134,7 @@ def session_detail(session_id):
         sales_pager=sales_pager,
         labels=CASH_MOVEMENT_LABELS,
         statuses=CASH_SESSION_STATUS_LABELS,
+        rate=rate,
     )
 
 

@@ -123,12 +123,22 @@ def seed_roles():
             db.session.add(role)
             db.session.flush()
             created += 1
-        current = {p.code for p in role.permissions}
-        for code in perms:
-            if code not in current:
-                perm = Permission.query.filter_by(code=code).first()
-                if perm is not None:
-                    role.permissions.append(perm)
+        else:
+            # Keep system role metadata in sync with defaults.
+            role.label = label
+            role.description = description
+            role.is_super_admin = is_super_admin
+        target = set(perms)
+        # For restricted system roles (vendeur), enforce the exact default policy.
+        if name == "vendeur" and role.is_system and not role.is_super_admin:
+            role.permissions = [p for p in Permission.query.filter(Permission.code.in_(target)).all()]
+        else:
+            current = {p.code for p in role.permissions}
+            for code in perms:
+                if code not in current:
+                    perm = Permission.query.filter_by(code=code).first()
+                    if perm is not None:
+                        role.permissions.append(perm)
     db.session.commit()
     return created
 

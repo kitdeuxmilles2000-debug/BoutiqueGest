@@ -190,13 +190,14 @@ class GitHubSyncTests(unittest.TestCase):
         pull.assert_called_once()
         push.assert_called_once()
 
-    def test_public_repository_is_rejected(self):
+    def test_public_repository_is_allowed(self):
         with self.app.app_context():
             with patch(
                 "app.services.github_sync._api_request",
                 return_value={"private": False},
-            ), self.assertRaisesRegex(RuntimeError, "doit être privé"):
-                _assert_private_repository("owner/repository", "test-token")
+            ):
+                result = _assert_private_repository("owner/repository", "test-token")
+            self.assertEqual(result, {"private": False})
 
 
 if __name__ == "__main__":

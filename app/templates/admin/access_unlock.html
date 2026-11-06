@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Accès protégé{% endblock %}
+{% block heading %}Accès protégé{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:520px;margin:0 auto">
+  <h2>Déverrouillage par mot de passe administrateur</h2>
+  <p class="sub">Votre profil (vendeur) a accès uniquement au <strong>point de vente</strong>, aux <strong>produits</strong>, à la <strong>caisse</strong>, aux <strong>dépenses</strong> et aux <strong>rapports</strong>. Pour accéder aux autres sections (ou à l'export complet des rapports), saisissez le mot de passe d'un <strong>administrateur/propriétaire</strong>.</p>
+  {% if access_unlocked %}
+  <div class="alert success">Accès déjà déverrouillé pour cette session. <a href="{{ next_url or url_for('main.dashboard') }}">Continuer</a></div>
+  {% endif %}
+  <form method="post" action="{{ url_for('admin.access_unlock') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ next_url or '' }}">
+    <div class="field">
+      <label for="admin_password">Mot de passe administrateur/propriétaire</label>
+      <input type="password" id="admin_password" name="admin_password" required autocomplete="current-password">
+    </div>
+    <div class="row" style="gap:10px;flex-wrap:wrap">
+      <button class="btn" type="submit">Déverrouiller l'accès</button>
+      <a class="btn ghost" href="{{ url_for('main.dashboard') }}">Retour</a>
+    </div>
+  </form>
+  <p class="sub mt-16">Le déverrouillage reste actif pendant une durée limitée pour cette session.</p>
+</div>
+{% endblock %}

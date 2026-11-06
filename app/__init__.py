@@ -89,6 +89,7 @@ def _register_context(app):
     from app.models.sync import SYNC_STATUS_BADGES
     from app.models.notifications import NOTIFICATION_TYPE_BADGES, NOTIFICATION_TYPE_LABELS
     from app.security.permissions import P, PERMISSION_LABELS
+    from app.security.access_gate import is_access_unlocked, is_restricted_vendor
 
     @app.template_filter("num")
     def fmt_num(value, decimals=2):
@@ -111,9 +112,21 @@ def _register_context(app):
     def inject_globals():
         from datetime import date
 
+        from flask import g
         from flask_login import current_user
 
         from app.security.owner import is_owner
+
+        def _get_exchange_rate():
+            if not hasattr(g, "_exchange_rate"):
+                try:
+                    from app.services.settings import latest_rate
+
+                    r = latest_rate()
+                    g._exchange_rate = r if (r and getattr(r, "rate", 0)) else None
+                except Exception:
+                    g._exchange_rate = None
+            return g._exchange_rate
 
         return {
             "P": P,
@@ -129,10 +142,22 @@ def _register_context(app):
             "github_sync_error": app.extensions.get("github_sync_error", ""),
             "is_owner": lambda: is_owner(current_user),
             "now_date": date.today(),
+            "exchange_rate": _get_exchange_rate(),
+            "access_unlocked": is_access_unlocked(),
+            "is_restricted_vendor": is_restricted_vendor(),
         }
 
 
 def _register_read_only_mode(app):
+    from app.security.access_gate import vendor_gate_check
+
+    @app.before_request
+    def vendor_access_gate():
+        # En lecture seule cloud, pas de déverrouillage interactif des sections.
+        if app.config.get("CLOUD_READ_ONLY"):
+            return None
+        return vendor_gate_check()
+
     @app.before_request
     def reject_cloud_writes():
         if not app.config.get("CLOUD_READ_ONLY"):

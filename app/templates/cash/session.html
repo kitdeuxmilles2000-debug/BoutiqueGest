@@ -31,11 +31,40 @@
   </div>
 
   <div class="grid cols-4">
-    <div class="kpi"><span class="label">Fond initial</span><span class="value">{{ session.solde_initial | num }}</span><span class="foot">{{ session.currency }}</span></div>
-    <div class="kpi"><span class="label">Theorique</span><span class="value">{{ theorique | num }}</span><span class="foot">initial + entrees − sorties</span></div>
-    <div class="kpi"><span class="label">Compte</span><span class="value">{{ session.solde_compte | num if session.solde_compte is not none else '—' }}</span><span class="foot">{{ session.currency }}</span></div>
-    <div class="kpi"><span class="label">Ecart</span><span class="value {{ 'bad' if session.ecart != 0 else 'good' }}">{{ session.ecart | num }}</span><span class="foot">{{ session.motif_ecart or '—' }}</span></div>
+    <div class="kpi">
+      <span class="label">Fond initial</span>
+      <span class="value">{{ session.solde_initial | num }} {{ session.currency }}</span>
+      <span class="foot">
+        {% if rate and rate.rate and session.currency == 'CDF' %}≈ {{ (session.solde_initial / rate.rate) | round(2) }} ${% elif rate and rate.rate and session.currency == 'USD' %}≈ {{ (session.solde_initial * rate.rate) | round(2) }} FC{% else %}{{ session.currency }}{% endif %}
+      </span>
+    </div>
+    <div class="kpi">
+      <span class="label">Théorique</span>
+      <span class="value">{{ theorique | num }} {{ session.currency }}</span>
+      <span class="foot">
+        {% if rate and rate.rate and session.currency == 'CDF' %}≈ {{ (theorique / rate.rate) | round(2) }} ${% elif rate and rate.rate and session.currency == 'USD' %}≈ {{ (theorique * rate.rate) | round(2) }} FC{% else %}initial + entrées − sorties{% endif %}
+      </span>
+    </div>
+    <div class="kpi">
+      <span class="label">Compté</span>
+      <span class="value">{{ session.solde_compte | num if session.solde_compte is not none else '—' }} {% if session.solde_compte is not none %}{{ session.currency }}{% endif %}</span>
+      <span class="foot">
+        {% if session.solde_compte is not none and rate and rate.rate and session.currency == 'CDF' %}≈ {{ (session.solde_compte / rate.rate) | round(2) }} ${% elif session.solde_compte is not none and rate and rate.rate and session.currency == 'USD' %}≈ {{ (session.solde_compte * rate.rate) | round(2) }} FC{% else %}{{ session.currency }}{% endif %}
+      </span>
+    </div>
+    <div class="kpi">
+      <span class="label">Écart</span>
+      <span class="value {{ 'bad' if session.ecart != 0 else 'good' }}">{{ session.ecart | num }} {{ session.currency }}</span>
+      <span class="foot">
+        {% if rate and rate.rate and session.currency == 'CDF' %}≈ {{ (session.ecart / rate.rate) | round(2) }} $ · {% elif rate and rate.rate and session.currency == 'USD' %}≈ {{ (session.ecart * rate.rate) | round(2) }} FC · {% endif %}{{ session.motif_ecart or '—' }}
+      </span>
+    </div>
   </div>
+  {% if rate %}
+  <p class="sub" style="margin-top:8px">Affichage en dollars ($) et en francs congolais (FC) — taux 1 USD = {{ rate.rate }} CDF ({{ rate.effective_date.strftime('%d/%m/%Y') }}). <a href="{{ url_for('admin.settings') }}">Paramètres</a></p>
+  {% elif current_user.has_permission(P.SETTINGS_MANAGE) %}
+  <p class="sub" style="margin-top:8px"><a href="{{ url_for('admin.settings') }}">Paramètres</a> : configurez le taux pour afficher les montants en USD ($) et en FC.</p>
+  {% endif %}
 </div>
 
 {% if session.is_open and current_user.has_permission(P.CASH_OPEN) %}
@@ -95,7 +124,11 @@
         <tr>
           <td>{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
           <td>{{ labels.get(m.kind, m.kind) }}</td>
-          <td style="font-weight:700;color:{{ 'var(--success)' if m.amount >= 0 else 'var(--danger)' }}">{{ '+' if m.amount >= 0 }}{{ m.amount | num }}</td>
+          <td style="font-weight:700;color:{{ 'var(--success)' if m.amount >= 0 else 'var(--danger)' }}">
+            {{ '+' if m.amount >= 0 }}{{ m.amount | num }} {{ m.currency or session.currency }}
+            {% set mcur = m.currency or session.currency %}
+            {% if rate and rate.rate and mcur == 'CDF' %}<br><span class="muted" style="font-weight:400">≈ {{ (m.amount / rate.rate) | round(2) }} $</span>{% elif rate and rate.rate and mcur == 'USD' %}<br><span class="muted" style="font-weight:400">≈ {{ (m.amount * rate.rate) | round(2) }} FC</span>{% endif %}
+          </td>
           <td>{{ m.reason or '—' }}</td>
           <td>{{ m.user.username if m.user else '—' }}</td>
         </tr>

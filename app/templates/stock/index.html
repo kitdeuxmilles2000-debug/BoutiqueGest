@@ -4,10 +4,35 @@
 {% block heading %}Stock{% endblock %}
 
 {% block content %}
+{% if converted_stock_totals %}
+<div class="card" style="margin-bottom:12px">
+  <div class="card-head">
+    <div>
+      <h2>Valeur du stock (taux courant)</h2>
+      <p class="sub">Affichage en dollars et en francs congolais. {% if rate %}Taux : 1 USD = {{ rate.rate }} CDF ({{ rate.effective_date.strftime('%d/%m/%Y') }}).{% endif %} {% if current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.settings') }}">Paramètres</a>{% endif %}</p>
+    </div>
+  </div>
+  <div class="grid cols-2">
+    <div class="card kpi">
+      <span class="label">Valeur du stock · USD ($)</span>
+      <span class="value">{{ converted_stock_totals.USD | num }} $</span>
+      <span class="foot">Équivalent converti au taux courant</span>
+    </div>
+    <div class="card kpi">
+      <span class="label">Valeur du stock · CDF (FC)</span>
+      <span class="value">{{ converted_stock_totals.CDF | num }} FC</span>
+      <span class="foot">Équivalent converti au taux courant</span>
+    </div>
+  </div>
+</div>
+{% elif current_user.has_permission(P.SETTINGS_MANAGE) %}
+<div class="card" style="margin-bottom:12px"><p class="sub">Aucun taux de change configuré : <a href="{{ url_for('admin.settings') }}">Paramètres → Taux de change</a> pour afficher la valeur du stock en USD et en FC.</p></div>
+{% endif %}
+
 <div class="grid cols-3">
   {% for cur, totals in stock_totals.items() %}
   <div class="card kpi">
-    <span class="label">Valeur du stock · {{ cur }}</span>
+    <span class="label">Valeur du stock · {{ cur }} (origine)</span>
     <span class="value">{{ totals.stock_value | num }} {{ cur }}</span>
     <span class="foot">Marge brute potentielle estimée sur {{ totals.priced_products }} produit(s) tarifé(s) : {{ totals.potential_margin | num }} {{ cur }}</span>
   </div>
@@ -117,11 +142,14 @@
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="6"><strong>VALEUR TOTALE PAR DEVISE</strong></td>
+          <td colspan="6"><strong>VALEUR TOTALE (par devise d'origine)</strong></td>
           <td class="num">
             {% for cur, totals in stock_totals.items() %}
               <strong>{{ totals.stock_value | num }} {{ cur }}</strong>{% if not loop.last %}<br>{% endif %}
             {% endfor %}
+            {% if converted_stock_totals %}
+              <br><span class="muted">≈ {{ converted_stock_totals.USD | num }} $ / {{ converted_stock_totals.CDF | num }} FC</span>
+            {% endif %}
           </td>
           <td colspan="4"></td>
         </tr>

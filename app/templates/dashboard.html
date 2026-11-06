@@ -46,7 +46,7 @@
   <div class="card kpi">
     <span class="label">Résultat du jour ({{ cur }})</span>
     <span class="value {{ 'accent' if r.resultat >= 0 else '' }}">{{ r.resultat | num }} {{ cur }}</span>
-    <span class="foot">Marge brute {{ r.marge | num }} − charges validées {{ r.charges | num }}</span>
+    <span class="foot">Marge {{ r.marge | num }} − charges {{ r.charges | num }}{% if exchange_rate and cur == 'CDF' %} · ≈ {{ (r.resultat / exchange_rate.rate) | round(2) }} $ / charges ≈ {{ (r.charges / exchange_rate.rate) | round(2) }} ${% elif exchange_rate and cur == 'USD' %} · ≈ {{ (r.resultat * exchange_rate.rate) | round(2) }} FC / charges ≈ {{ (r.charges * exchange_rate.rate) | round(2) }} FC{% endif %}</span>
   </div>
   {% endfor %}
 </div>
@@ -58,7 +58,7 @@
     <div style="margin-top:6px">
       {% for dev, v in ventes_par_devise.items() %}
       <div style="display:flex;justify-content:space-between;align-items:baseline"><span>{{ dev }}</span><span class="value accent" style="font-size:1.25rem">{{ v.montant | num }} {{ dev }}</span></div>
-      <div class="foot">{{ v.count }} vente(s) · Marge {{ v.marge | num }} {{ dev }}</div>
+      <div class="foot">{{ v.count }} vente(s) · Marge {{ v.marge | num }} {{ dev }}{% if exchange_rate and dev == 'CDF' %} · ≈ {{ (v.montant / exchange_rate.rate) | round(2) }} ${% elif exchange_rate and dev == 'USD' %} · ≈ {{ (v.montant * exchange_rate.rate) | round(2) }} FC{% endif %}</div>
       {% else %}
       <span class="value accent">0</span>
       <span class="foot">Aucune vente aujourd'hui</span>

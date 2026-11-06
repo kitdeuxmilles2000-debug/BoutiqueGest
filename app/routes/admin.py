@@ -19,6 +19,9 @@ from app.extensions import db
 from app.models.audit import AuditLog
 from app.models.settings import OUTBOX_STATUS_LABELS, OutboxMessage
 from app.models.user import Role, User, get_setting, set_setting
+from urllib.parse import urlparse
+
+from app.security.access_gate import clear_access_unlocked, set_access_unlocked
 from app.security.audit import log_action
 from app.security.decorators import (
     admin_password_required,
@@ -26,6 +29,7 @@ from app.security.decorators import (
     owner_reauth_required,
     permission_required,
 )
+from app.security.owner import find_admin_by_password
 from app.security.permissions import P
 from app.services import backup as backup_service
 from app.services import db_history as db_history_service
@@ -263,11 +267,12 @@ def sync_process():
     return redirect(url_for("admin.sync"))
 
 
-# ------------------------------------------------------------ Taux de change
-@admin_bp.route("/taux", methods=["GET", "POST"])
+# ------------------------------------------------------------ Paramètres / Taux de change
+@admin_bp.route("/parametres", methods=["GET", "POST"])
+@admin_bp.route("/settings", methods=["GET", "POST"])
 @login_required
 @permission_required(P.SETTINGS_MANAGE)
-def exchange_rate():
+def settings():
     if request.method == "POST":
         try:
             rate = settings_service.set_rate(
@@ -280,20 +285,30 @@ def exchange_rate():
             )
             db.session.commit()
             flash(
-                f"Taux enregistre : 1 USD = {rate.rate} CDF (effet {rate.effective_date:%d/%m/%Y}).",
+                f"Taux enregistré : 1 USD = {rate.rate} CDF (effet {rate.effective_date:%d/%m/%Y}). Les affichages (stock, caisse, rapports) utilisent ce taux.",
                 "success",
             )
         except (ValueError, ArithmeticError) as exc:
             db.session.rollback()
             flash(f"Taux invalide : {exc}", "danger")
-        return redirect(url_for("admin.exchange_rate"))
+        return redirect(url_for("admin.settings"))
 
     latest = settings_service.latest_rate()
     return render_template(
-        "admin/exchange_rate.html",
+        "admin/settings.html",
         latest=latest,
         history=settings_service.rate_history(),
     )
+
+
+@admin_bp.route("/taux", methods=["GET", "POST"])
+@login_required
+@permission_required(P.SETTINGS_MANAGE)
+def exchange_rate():
+    # Compatibilité: redirige vers Paramètres
+    if request.method == "POST":
+        return settings()
+    return redirect(url_for("admin.settings"))
 
 
 # ------------------------------------------------------------ Prix et marges
@@ -615,3 +630,50 @@ def outbox_resend(message_id):
     else:
         flash("Message replace en file d'attente.", "success")
     return redirect(url_for("admin.outbox"))
+
+
+def _safe_next(target):
+    if not target:
+        return None
+    ref = urlparse(request.host_url)
+    test = urlparse(target if '://' in target else (request.host_url.rstrip('/') + '/' + target.lstrip('/')))
+    if test.scheme in ('http', 'https') and ref.netloc == test.netloc:
+        path = test.path or '/'
+        if test.query:
+            path += '?' + test.query
+        return path
+    if target.startswith('/') and not target.startswith('//'):
+        return target
+    return None
+
+
+@admin_bp.route('/acces/deverrouiller', methods=['GET', 'POST'])
+@login_required
+def access_unlock():
+    next_url = _safe_next(request.values.get('next')) or url_for('main.dashboard')
+    if request.method == 'POST':
+        pwd = (request.form.get('admin_password') or '').strip()
+        authorizer = find_admin_by_password(pwd)
+        if authorizer is None:
+            log_action('access_unlock_failed', entity='route', reason=request.endpoint, commit=True)
+            flash('Mot de passe administrateur/propriétaire invalide.', 'danger')
+            return render_template('admin/access_unlock.html', next_url=next_url)
+        set_access_unlocked()
+        log_action(
+            'access_unlock_ok',
+            entity='route',
+            reason=f'autorise par {authorizer.username} -> {next_url}',
+            commit=True,
+        )
+        flash('Accès déverrouillé pour cette session.', 'success')
+        return redirect(next_url)
+    return render_template('admin/access_unlock.html', next_url=next_url)
+
+
+@admin_bp.route('/acces/verrouiller', methods=['POST'])
+@login_required
+def access_lock():
+    clear_access_unlocked()
+    flash('Accès protégé réactivé.', 'success')
+    ref = request.referrer or url_for('main.dashboard')
+    return redirect(_safe_next(ref) or url_for('main.dashboard'))

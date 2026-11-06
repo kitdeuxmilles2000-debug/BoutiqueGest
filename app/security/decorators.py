@@ -4,6 +4,7 @@ from functools import wraps
 from flask import abort, flash, redirect, request, url_for
 from flask_login import current_user, login_required
 
+from app.security.access_gate import is_access_unlocked, is_restricted_vendor
 from app.security.audit import log_action
 from app.security.owner import find_admin_by_password, is_owner, require_owner_password
 
@@ -16,6 +17,18 @@ def permission_required(*permissions, mode="all"):
         @login_required
         def wrapper(*args, **kwargs):
             if current_user.is_super_admin:
+                return func(*args, **kwargs)
+            # Vendeur restreint déverrouillé par mot de passe admin: accès autorisé aux sections.
+            if is_restricted_vendor(current_user) and is_access_unlocked():
+                log_action(
+                    "access_unlocked",
+                    entity="route",
+                    reason=f"{request.endpoint} :: permissions={list(permissions)}",
+                    commit=False,
+                )
+                from app.extensions import db
+
+                db.session.commit()
                 return func(*args, **kwargs)
             if mode == "all" and hasattr(current_user, "has_all"):
                 checker = current_user.has_all

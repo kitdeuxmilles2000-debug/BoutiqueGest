@@ -46,6 +46,23 @@ def index():
     products = _active_products()
     alerts = stock_service.stock_alerts(products)
     stock_totals, product_margins = stock_service.stock_financial_summary(products)
+    rate_obj = settings_service.latest_rate()
+    rate = dec(rate_obj.rate) if rate_obj else None
+    # Totaux convertis pour affichage USD/CDF (valeur de stock au coût moyen)
+    converted = {"CDF": dec("0"), "USD": dec("0")} if rate and rate > 0 else {}
+    for cur, totals in stock_totals.items():
+        val = dec(totals.get("stock_value"))
+        if cur == "CDF":
+            if converted:
+                converted["CDF"] += val
+                converted["USD"] += (val / rate).quantize(dec("0.01"))
+        elif cur == "USD":
+            if converted:
+                converted["USD"] += val
+                converted["CDF"] += (val * rate).quantize(dec("0.01"))
+        elif converted:
+            # devise non convertible: on ne l'ajoute pas aux totaux CDF/USD
+            pass
     pager = paginate_list(products)
     return render_template(
         "stock/index.html",
@@ -53,6 +70,8 @@ def index():
         pager=pager,
         alerts=alerts,
         stock_totals=stock_totals,
+        converted_stock_totals=converted,
+        rate=rate_obj,
         product_margins=product_margins,
         product_count=len(products),
     )

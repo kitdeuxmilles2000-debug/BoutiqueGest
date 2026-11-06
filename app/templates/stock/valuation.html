@@ -16,7 +16,7 @@
       </p>
     </div>
     {% if current_user.has_permission(P.SETTINGS_MANAGE) %}
-    <a class="btn ghost sm" href="{{ url_for('admin.exchange_rate') }}">Paramétrer le taux de change</a>
+    <a class="btn ghost sm" href="{{ url_for('admin.settings') }}">Paramètres (taux de change)</a>
     {% endif %}
   </div>
 

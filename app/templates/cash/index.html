@@ -12,7 +12,10 @@
     <div class="kpi">
       <span class="label">Fond de caisse initial</span>
       <span class="value">{{ own_session.solde_initial | num }} {{ own_session.currency }}</span>
-      <span class="foot">Ouverte le {{ own_session.opened_at.strftime('%d/%m/%Y %H:%M') }}</span>
+      <span class="foot">
+        {% if rate and rate.rate and own_session.currency == 'CDF' %}≈ {{ (own_session.solde_initial / rate.rate) | round(2) }} $ · {% elif rate and rate.rate and own_session.currency == 'USD' %}≈ {{ (own_session.solde_initial * rate.rate) | round(2) }} FC · {% endif %}
+        Ouverte le {{ own_session.opened_at.strftime('%d/%m/%Y %H:%M') }}
+      </span>
     </div>
     <div class="row mt-16">
       <a href="{{ url_for('cash.session_detail', session_id=own_session.id) }}" class="btn">Voir la caisse</a>
@@ -49,7 +52,10 @@
 </div>
 
 <div class="card">
-  <h2>{{ 'Toutes les sessions' if current_user.has_permission(P.CASH_VIEW_ALL) else 'Mes sessions' }}</h2>
+  <div class="row between">
+    <h2>{{ 'Toutes les sessions' if current_user.has_permission(P.CASH_VIEW_ALL) else 'Mes sessions' }}</h2>
+    {% if rate %}<span class="sub">Taux : 1 USD = {{ rate.rate }} CDF — affichage double devise disponible. <a href="{{ url_for('admin.settings') }}">Paramètres</a></span>{% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<span class="sub"><a href="{{ url_for('admin.settings') }}">Paramètres</a> : configurez le taux pour afficher USD/FC.</span>{% endif %}
+  </div>
   <div class="table-wrap">
     <table class="table">
       <thead><tr><th>Ouverte le</th><th>Caisse</th><th>Vendeur</th><th>Theorique</th><th>Compte</th><th>Ecart</th><th>Statut</th><th></th></tr></thead>

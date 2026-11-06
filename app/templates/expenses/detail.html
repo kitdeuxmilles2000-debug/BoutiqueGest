@@ -12,17 +12,21 @@
         {% elif expense.status == 'rejetee' %}<span class="badge red">Rejetee</span>
         {% else %}<span class="badge gray">Saisie</span>{% endif %}
       </h2>
-      <p class="sub">{{ expense.motif }} · {{ expense.amount | num }} {{ expense.currency }} ·
+      <p class="sub">{{ expense.motif }} · {{ expense.amount | num }} {{ expense.currency }}{% set xr = exchange_rate or rate %}{% if xr and expense.currency == 'CDF' %} (≈ {{ (expense.amount / xr.rate) | round(2) }} $){% elif xr and expense.currency == 'USD' %} (≈ {{ (expense.amount * xr.rate) | round(2) }} FC){% endif %} ·
         {{ expense.category.name if expense.category else 'Sans categorie' }}</p>
     </div>
     <a href="{{ url_for('expenses.index') }}" class="btn ghost">Retour</a>
   </div>
 
   <div class="grid cols-4">
+    <div class="kpi">
+      <span class="label">Montant</span>
+      <span class="value" style="font-size:1.1rem">{{ expense.amount | num }} {{ expense.currency }}</span>
+      <span class="foot">{% set xr = exchange_rate or rate %}{% if xr and expense.currency == 'CDF' %}≈ {{ (expense.amount / xr.rate) | round(2) }} ${% elif xr and expense.currency == 'USD' %}≈ {{ (expense.amount * xr.rate) | round(2) }} FC{% else %}{{ expense.currency }}{% endif %}</span>
+    </div>
     <div class="kpi"><span class="label">Date</span><span class="value" style="font-size:1.1rem">{{ expense.expense_date.strftime('%d/%m/%Y') }}</span></div>
-    <div class="kpi"><span class="label">Beneficiaire</span><span class="value" style="font-size:1.1rem">{{ expense.beneficiary or '—' }}</span></div>
-    <div class="kpi"><span class="label">Moyen</span><span class="value" style="font-size:1.1rem">{{ methods.get(expense.method, expense.method) }}</span></div>
-    <div class="kpi"><span class="label">Cree par</span><span class="value" style="font-size:1.1rem">{{ expense.created_by.full_name if expense.created_by else '—' }}</span></div>
+    <div class="kpi"><span class="label">Bénéficiaire</span><span class="value" style="font-size:1.1rem">{{ expense.beneficiary or '—' }}</span></div>
+    <div class="kpi"><span class="label">Moyen / Créé par</span><span class="value" style="font-size:.95rem">{{ methods.get(expense.method, expense.method) }}</span><span class="foot">{{ expense.created_by.full_name if expense.created_by else '—' }}</span></div>
   </div>
   {% if expense.reject_reason %}<p class="sub mt-16"><strong>Motif de rejet :</strong> {{ expense.reject_reason }}</p>{% endif %}
   {% if expense.validated_by %}<p class="sub">Validee par {{ expense.validated_by.full_name }} le {{ expense.validated_at.strftime('%d/%m/%Y %H:%M') }}</p>{% endif %}

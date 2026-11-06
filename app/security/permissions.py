@@ -112,11 +112,14 @@ DEFAULT_ROLES = {
     ),
     "vendeur": (
         "Vendeur",
-        "Enregistre les ventes et consulte ses propres ventes",
+        "Accès limité: point de vente, produits (consultation), caisse, dépenses et rapports. Les autres sections nécessitent un déverrouillage par mot de passe administrateur/propriétaire.",
         False,
         {
-            P.PRODUCTS_VIEW, P.STOCK_VIEW, P.SALES_CREATE, P.SALES_VIEW,
-            P.CASH_OPEN, P.CASH_CLOSE, P.PARTNERS_VIEW,
+            P.PRODUCTS_VIEW,
+            P.SALES_CREATE,
+            P.CASH_OPEN, P.CASH_CLOSE,
+            P.EXPENSES_VIEW, P.EXPENSES_CREATE,
+            P.REPORTS_VIEW,
         },
     ),
     "responsable_stock": (

@@ -25,7 +25,7 @@
     <div class="kpi"><span class="label">En attente de validation</span><span class="value"><span class="badge amber">{{ pending_qty | qty }}</span></span><span class="foot">entrée(s) à valider par le propriétaire</span></div>
     {% endif %}
     <div class="kpi"><span class="label">Coût moyen</span><span class="value">{{ product.cost_avg | num }}</span><span class="foot">{{ product.currency }} / {{ product.base_unit.code if product.base_unit }}</span></div>
-    <div class="kpi"><span class="label">Valeur du stock</span><span class="value">{{ product.stock_value | num }}</span><span class="foot">{{ product.currency }}</span></div>
+    <div class="kpi"><span class="label">Valeur du stock</span><span class="value">{{ product.stock_value | num }} {{ product.currency }}</span><span class="foot">{% set xr = exchange_rate or rate %}{% if xr and product.currency == 'CDF' %}≈ {{ (product.stock_value / xr.rate) | round(2) }} ${% elif xr and product.currency == 'USD' %}≈ {{ (product.stock_value * xr.rate) | round(2) }} FC{% else %}{{ product.currency }}{% endif %}</span></div>
     <div class="kpi"><span class="label">État</span>
       <span class="value">{% if product.is_out_of_stock %}<span class="badge red">Rupture</span>{% elif product.is_low_stock %}<span class="badge amber">Stock bas</span>{% else %}<span class="badge green">OK</span>{% endif %}</span>
       <span class="foot">{{ 'Actif' if product.active else 'Inactif' }}</span>

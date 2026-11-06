@@ -62,7 +62,7 @@
         <span class="ico">💵</span> Caisse
       </a>
       {% endif %}
-      {% if current_user.is_authenticated and current_user.has_permission(P.EXPENSES_VIEW) %}
+      {% if current_user.is_authenticated and current_user.has_permission(P.EXPENSES_VIEW) and not current_user.has_permission(P.REPORTS_VIEW) %}
       <a href="{{ url_for('reports.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('reports.') }}">
         <span class="ico">🧾</span> Dépenses
       </a>
@@ -79,7 +79,7 @@
       {% endif %}
       {% if current_user.is_authenticated and current_user.has_permission(P.REPORTS_VIEW) %}
       <a href="{{ url_for('reports.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('reports.') }}">
-        <span class="ico">📈</span> Rapports
+        <span class="ico">📈</span> Rapports{% if current_user.has_permission(P.EXPENSES_VIEW) %} &amp; dépenses{% endif %}
       </a>
       {% endif %}
 
@@ -105,25 +105,23 @@
         <span class="ico">💾</span> Sauvegardes
       </a>
       {% endif %}
-      {% if current_user.has_permission(P.SETTINGS_MANAGE) %}
-      <a href="{{ url_for('admin.reset_database') }}" class="{{ 'active' if request.endpoint == 'admin.reset_database' }}">
-        <span class="ico">🧹</span> Réinitialiser la base
-      </a>
-      {% endif %}
       {% if current_user.has_permission(P.SYNC_MANAGE) %}
       <a href="{{ url_for('admin.sync') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.sync') }}">
         <span class="ico">🔁</span> Synchronisation
       </a>
       {% endif %}
       {% if current_user.has_permission(P.SETTINGS_MANAGE) %}
-      <a href="{{ url_for('admin.exchange_rate') }}" class="{{ 'active' if request.endpoint == 'admin.exchange_rate' }}">
-        <span class="ico">💱</span> Taux de change
+      <a href="{{ url_for('admin.settings') }}" class="{{ 'active' if request.endpoint in ['admin.settings', 'admin.exchange_rate'] }}">
+        <span class="ico">⚙️</span> Paramètres
       </a>
       <a href="{{ url_for('admin.pricing') }}" class="{{ 'active' if request.endpoint == 'admin.pricing' }}">
         Prix et marges
       </a>
       <a href="{{ url_for('admin.outbox') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('admin.outbox') }}">
         <span class="ico">✉️</span> E-mails &amp; rapport
+      </a>
+      <a href="{{ url_for('admin.reset_database') }}" class="{{ 'active' if request.endpoint == 'admin.reset_database' }}">
+        <span class="ico">🧹</span> Réinitialiser la base
       </a>
       {% endif %}
       {% endif %}
@@ -144,6 +142,12 @@
       </div>
       <div class="row" style="gap:14px">
         {% if current_user.is_authenticated %}
+          {% if is_restricted_vendor and access_unlocked %}
+          <form method="post" action="{{ url_for('admin.access_lock') }}" style="margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn ghost sm" title="Réactiver les restrictions d'accès">🔓 Accès déverrouillé</button>
+          </form>
+          {% endif %}
           <div class="notif-wrap">
             <button type="button" class="notif-bell" id="notifBell" title="Notifications" aria-label="Notifications">
               <span class="notif-ico">🔔</span>
