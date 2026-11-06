@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Lancement de BoutiqueGest en local avec Waitress
-Accès : http://127.0.0.1:5000
-Configuration optimisée pour performances maximales
+Lancement de BoutiqueGest en local avec Waitress.
+
+Accès local : http://127.0.0.1:PORT
+Accès réseau local (Wi-Fi/LAN) : http://<IP_DE_CET_ORDINATEUR>:PORT
+  (les autres appareils doivent être sur le même réseau)
+
+Variables d'environnement optionnelles :
+  HOST  (défaut 0.0.0.0 = accessible sur le réseau local)
+  PORT  (défaut 5000)
 """
 
 import os
-import sys
+import socket
 import webbrowser
 from threading import Timer
 
@@ -27,42 +33,75 @@ app.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000  # 1 an cache static
 
 
-def open_browser():
-    """Ouvre le navigateur automatiquement après démarrage"""
+def _lan_ip():
+    """Best-effort LAN IP for display (no external network traffic required)."""
     try:
-        webbrowser.open("http://127.0.0.1:5000")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.connect(("10.255.255.255", 1))
+            ip = sock.getsockname()[0]
+        finally:
+            sock.close()
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    return None
+
+
+def open_browser(url):
+    """Ouvre le navigateur automatiquement après démarrage."""
+    try:
+        webbrowser.open(url)
     except Exception:
         pass
 
 
 if __name__ == "__main__":
+    host = os.environ.get("HOST", "0.0.0.0").strip() or "0.0.0.0"
+    try:
+        port = int(os.environ.get("PORT", "5000"))
+    except (TypeError, ValueError):
+        port = 5000
+
+    local_url = f"http://127.0.0.1:{port}"
+    lan_ip = _lan_ip()
+    lan_url = f"http://{lan_ip}:{port}" if lan_ip else None
+
     print("=" * 60)
     print("BOUTIQUEGEST - DÉMARRAGE EN COURS")
     print("=" * 60)
-    print("Adresse : http://127.0.0.1:5000")
+    print(f"Accès local      : {local_url}")
+    if lan_url and host in ("0.0.0.0", "::"):
+        print(f"Accès réseau LAN : {lan_url}")
+        print("  (même Wi-Fi/réseau : ouvrez cette adresse sur un autre appareil)")
+        print("  Si bloqué, autorisez Python/port dans le pare-feu Windows.")
+    elif host not in ("0.0.0.0", "::"):
+        print(f"Accès configuré  : http://{host}:{port}")
     print("Pour arrêter : CTRL + C")
     print("=" * 60)
 
-    # Ouvrir le navigateur après 1.5 secondes
-    Timer(1.5, open_browser).start()
+    # Ouvrir le navigateur local après 1.5 secondes
+    Timer(1.5, open_browser, args=(local_url,)).start()
 
     # Configuration Waitress optimisée
-    # - threads: nombre de threads workers (ajusté selon CPU)
-    # - channel_timeout: timeout pour les connexions inactives
-    # - connection_limit: limite de connexions simultanées
-    # - send_bytes: taille du buffer d'envoi (optimisé)
-    # - recv_bytes: taille du buffer de réception (optimisé)
     serve(
         app,
-        host="127.0.0.1",
-        port=5000,
-        threads=8,                      # Threads workers
-        channel_timeout=120,           # Timeout connexion inactive
-        connection_limit=1000,          # Limite connexions simultanées
-        max_request_body_size=10485760, # 10 MB max body
-        send_bytes=65536,              # 64 KB buffer envoi
-        recv_bytes=65536,              # 64 KB buffer réception
-        ident="BoutiqueGest",          # Identifiant serveur
-        url_prefix="",                 # Pas de préfixe URL
-        clear_untrusted_proxy_headers=True  # Sécurité proxy
+        host=host,
+        port=port,
+        threads=8,                       # Threads workers
+        channel_timeout=120,             # Timeout connexion inactive
+        connection_limit=1000,           # Limite connexions simultanées
+        max_request_body_size=10485760,  # 10 MB max body
+        send_bytes=65536,                # 64 KB buffer envoi
+        recv_bytes=65536,                # 64 KB buffer réception
+        ident="BoutiqueGest",            # Identifiant serveur
+        url_prefix="",                   # Pas de préfixe URL
+        clear_untrusted_proxy_headers=True,  # Sécurité proxy
     )
