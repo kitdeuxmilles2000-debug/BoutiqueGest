@@ -1,6 +1,8 @@
 """Logique de stock : conversions, mouvements, cout moyen pondere, inventaires."""
 from decimal import Decimal, InvalidOperation
 
+from sqlalchemy import func
+
 from app.extensions import db
 from app.models.catalog import Product, ProductUnit
 from app.models.stock import IN_KINDS, InventoryLine, MovementKind, StockMovement
@@ -100,6 +102,44 @@ def recompute_stock(product):
     product.stock_qty = total
     db.session.commit()
     return total
+
+
+def recompute_all_stocks(commit=True):
+    """Recalcule les quantites de tous les produits depuis leurs mouvements.
+
+    Les produits sans aucun mouvement sont conserves tels quels : cela evite
+    d'ecraser un stock historique saisi avant la mise en place des mouvements.
+    """
+    sums = dict(
+        db.session.query(
+            StockMovement.product_id,
+            func.coalesce(func.sum(StockMovement.quantity), 0),
+        )
+        .group_by(StockMovement.product_id)
+        .all()
+    )
+    products = Product.query.all()
+    updated = 0
+    unchanged = 0
+    skipped = 0
+    for product in products:
+        if product.id not in sums:
+            skipped += 1
+            continue
+        total = dec(sums[product.id])
+        if dec(product.stock_qty) != total:
+            product.stock_qty = total
+            updated += 1
+        else:
+            unchanged += 1
+    if commit:
+        db.session.commit()
+    return {
+        "updated": updated,
+        "unchanged": unchanged,
+        "skipped": skipped,
+        "total": len(products),
+    }
 
 
 def product_movements(product):
@@ -239,7 +279,7 @@ def stock_valuation_report(products, rate=None):
     return rows, native_totals, converted_totals
 
 
-def apply_inventory_validation(session, user_id, reason=None):
+def apply_inventory_validation(session, user_id, reason=None, commit=True):
     """Applique les ecarts d'un inventaire valide sous forme de mouvements."""
     created = 0
     for line in session.lines:
@@ -259,7 +299,8 @@ def apply_inventory_validation(session, user_id, reason=None):
             commit=False,
         )
         created += 1
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return created
 
 

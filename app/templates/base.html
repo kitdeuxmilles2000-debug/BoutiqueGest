@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/banking.css') }}">
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
 <div class="app-shell">
@@ -42,10 +44,14 @@
       </a>
       {% endif %}
       {% if current_user.is_authenticated and current_user.has_permission(P.LOSS_MANAGE) %}
-      <a href="{{ url_for('stock.index') }}" class="">Pertes</a>
+      <a href="{{ url_for('stock.loss') }}" class="{{ 'active' if request.endpoint == 'stock.loss' }}">
+        <span class="ico">🗑️</span> Pertes
+      </a>
       {% endif %}
       {% if current_user.is_authenticated and current_user.has_permission(P.INVENTORY_MANAGE) %}
-      <a href="{{ url_for('stock.index') }}">Inventaire</a>
+      <a href="{{ url_for('stock.inventory_list') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('stock.inventory_') }}">
+        <span class="ico">📋</span> Inventaire
+      </a>
       {% endif %}
       {% if current_user.is_authenticated and current_user.has_permission(P.PURCHASE_VIEW) %}
       <a href="{{ url_for('purchases.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('purchases.') }}">
@@ -62,8 +68,8 @@
         <span class="ico">💵</span> Caisse
       </a>
       {% endif %}
-      {% if current_user.is_authenticated and current_user.has_permission(P.EXPENSES_VIEW) and not current_user.has_permission(P.REPORTS_VIEW) %}
-      <a href="{{ url_for('reports.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('reports.') }}">
+      {% if current_user.is_authenticated and current_user.has_permission(P.EXPENSES_VIEW) %}
+      <a href="{{ url_for('expenses.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('expenses.') }}">
         <span class="ico">🧾</span> Dépenses
       </a>
       {% endif %}
@@ -79,7 +85,7 @@
       {% endif %}
       {% if current_user.is_authenticated and current_user.has_permission(P.REPORTS_VIEW) %}
       <a href="{{ url_for('reports.index') }}" class="{{ 'active' if request.endpoint and request.endpoint.startswith('reports.') }}">
-        <span class="ico">📈</span> Rapports{% if current_user.has_permission(P.EXPENSES_VIEW) %} &amp; dépenses{% endif %}
+        <span class="ico">📈</span> Rapports
       </a>
       {% endif %}
 

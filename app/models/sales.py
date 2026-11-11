@@ -50,6 +50,7 @@ class CashMovementKind:
     DEPENSE = "depense"
     RECOUVREMENT = "recouvrement"  # reglement d'une creance client (entree)
     REGLEMENT = "reglement"        # paiement d'une dette fournisseur (sortie)
+    AJUSTEMENT = "ajustement"      # correction / contre-passation securisee
 
 
 # Types qui font entrer de l'argent dans la caisse
@@ -70,6 +71,7 @@ CASH_MOVEMENT_LABELS = {
     CashMovementKind.DEPENSE: "Depense",
     CashMovementKind.RECOUVREMENT: "Recouvrement credit client",
     CashMovementKind.REGLEMENT: "Reglement fournisseur",
+    CashMovementKind.AJUSTEMENT: "Ajustement / correction",
 }
 
 

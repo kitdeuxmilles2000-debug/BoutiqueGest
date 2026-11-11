@@ -55,6 +55,7 @@ def _register_blueprints(app):
     from app.routes.auth import auth_bp
     from app.routes.cash import cash_bp
     from app.routes.credits import credits_bp
+    from app.routes.expenses import expenses_bp
     from app.routes.main import main_bp
     from app.routes.partners import partners_bp
     from app.routes.pos import pos_bp
@@ -75,6 +76,7 @@ def _register_blueprints(app):
     app.register_blueprint(sales_bp)
     app.register_blueprint(pos_bp)
     app.register_blueprint(cash_bp)
+    app.register_blueprint(expenses_bp)
     app.register_blueprint(credits_bp)
     app.register_blueprint(partners_bp)
     app.register_blueprint(reports_bp)

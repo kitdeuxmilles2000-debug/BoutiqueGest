@@ -4,6 +4,7 @@ from datetime import date
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.extensions import db
 from app.models.catalog import Product, ProductStatus, ProductUnit, normalize_product_name
@@ -35,15 +36,24 @@ from app.services.stock import dec
 stock_bp = Blueprint("stock", __name__, url_prefix="/stock")
 
 
-def _active_products():
-    return Product.query.filter_by(active=True).order_by(Product.name).all()
+def _active_products(eager=False):
+    query = Product.query.filter_by(active=True)
+    if eager:
+        # Evite les requetes N+1 (categorie, unite de base et formats de vente)
+        # sur les ecrans qui affichent les valeurs et marges produit par produit.
+        query = query.options(
+            joinedload(Product.category),
+            joinedload(Product.base_unit),
+            selectinload(Product.selling_units).joinedload(ProductUnit.unit),
+        )
+    return query.order_by(Product.name).all()
 
 
 @stock_bp.route("/")
 @login_required
 @permission_required(P.STOCK_VIEW)
 def index():
-    products = _active_products()
+    products = _active_products(eager=True)
     alerts = stock_service.stock_alerts(products)
     stock_totals, product_margins = stock_service.stock_financial_summary(products)
     rate_obj = settings_service.latest_rate()
@@ -81,7 +91,7 @@ def index():
 @login_required
 @permission_required(P.STOCK_VIEW)
 def valuation():
-    products = _active_products()
+    products = _active_products(eager=True)
     rate = settings_service.latest_rate()
     rows, native_totals, converted_totals = stock_service.stock_valuation_report(
         products, rate.rate if rate else None
@@ -96,6 +106,35 @@ def valuation():
         unconverted_currencies=sorted(set(native_totals) - {"CDF", "USD"}),
         rate=rate,
     )
+
+
+@stock_bp.route("/actualiser", methods=["POST"])
+@login_required
+@permission_required(P.STOCK_MANAGE)
+@admin_password_required()
+def refresh_stock():
+    """Recalcule les quantites depuis les mouvements (action securisee)."""
+    try:
+        result = stock_service.recompute_all_stocks()
+    except Exception as exc:  # noqa: BLE001 - message utilisateur clair
+        db.session.rollback()
+        flash(f"Actualisation impossible : {exc}", "danger")
+        return redirect(request.referrer or url_for("stock.index"))
+    log_action(
+        "stock_refresh",
+        entity="stock",
+        after=result,
+        reason="Actualisation manuelle des quantites depuis les mouvements.",
+        commit=True,
+    )
+    flash(
+        "Stock actualisé : "
+        f"{result['updated']} produit(s) corrigé(s), "
+        f"{result['unchanged']} déjà à jour, "
+        f"{result['skipped']} conservé(s) sans mouvement.",
+        "success",
+    )
+    return redirect(request.referrer or url_for("stock.index"))
 
 
 @stock_bp.route("/ravitailler/<int:product_id>", methods=["POST"])
@@ -161,6 +200,240 @@ def restock(product_id):
         db.session.rollback()
         flash(str(exc), "danger")
     return redirect(request.referrer or url_for("stock.index"))
+
+
+@stock_bp.route("/perte", methods=["GET", "POST"])
+@login_required
+@permission_required(P.LOSS_MANAGE)
+def loss():
+    """Declare une perte, une casse ou une peremption (sortie de stock tracee)."""
+    products = _active_products(eager=True)
+    kinds = {
+        MovementKind.PERTE: MOVEMENT_LABELS[MovementKind.PERTE],
+        MovementKind.PERTE_PEREMPTION: MOVEMENT_LABELS[MovementKind.PERTE_PEREMPTION],
+    }
+
+    if request.method == "POST":
+        product = db.session.get(Product, request.form.get("product_id", type=int) or 0)
+        if product is None:
+            flash("Selectionnez un produit.", "danger")
+            return redirect(url_for("stock.loss"))
+
+        try:
+            quantity = dec((request.form.get("quantity") or "").strip())
+            if quantity <= 0:
+                raise ValueError("La quantite perdue doit etre strictement positive.")
+            unit_id = request.form.get("unit_id", type=int) or product.base_unit_id
+            kind = (request.form.get("kind") or MovementKind.PERTE).strip()
+            if kind not in kinds:
+                raise ValueError("Type de perte invalide.")
+            reason = (request.form.get("reason") or "").strip()
+            if not reason:
+                raise ValueError("Le motif de la perte est obligatoire.")
+
+            qty_base = stock_service.to_base_quantity(product, unit_id, quantity)
+            if qty_base > dec(product.stock_qty):
+                unit_code = product.base_unit.code if product.base_unit else ""
+                raise ValueError(
+                    "La quantite perdue depasse le stock disponible "
+                    f"({product.stock_qty} {unit_code})."
+                )
+
+            stock_service.record_movement(
+                product,
+                kind,
+                -qty_base,
+                unit_id=unit_id,
+                cost_unit=product.cost_avg,
+                currency=product.currency,
+                source_type="loss",
+                reason=reason,
+                user_id=current_user.id,
+                commit=False,
+            )
+            log_action(
+                "stock_loss",
+                entity="product",
+                entity_uuid=product.uuid,
+                after={"kind": kind, "qty_base": str(-qty_base), "reason": reason},
+                reason=reason,
+                commit=False,
+            )
+            db.session.commit()
+            flash(
+                f"Perte enregistree pour {product.name} : {quantity} retire(s) du stock.",
+                "success",
+            )
+            return redirect(url_for("stock.movements"))
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), "danger")
+        except Exception as exc:  # noqa: BLE001 - message lisible pour l'utilisateur
+            db.session.rollback()
+            flash(str(exc), "danger")
+
+    return render_template("stock/loss.html", products=products, kinds=kinds)
+
+
+def _next_inventory_reference():
+    prefix = f"INV-{date.today():%Y%m%d}"
+    count = InventorySession.query.filter(InventorySession.reference.like(prefix + "%")).count()
+    return f"{prefix}-{count + 1:04d}"
+
+
+@stock_bp.route("/inventaires")
+@login_required
+@permission_required(P.INVENTORY_MANAGE, P.INVENTORY_VALIDATE, mode="any")
+def inventory_list():
+    sessions = (
+        InventorySession.query.options(selectinload(InventorySession.lines))
+        .order_by(InventorySession.created_at.desc())
+        .all()
+    )
+    return render_template("stock/inventory_list.html", sessions=sessions)
+
+
+@stock_bp.route("/inventaires/nouveau", methods=["POST"])
+@login_required
+@permission_required(P.INVENTORY_MANAGE)
+def inventory_new():
+    scope = (request.form.get("scope") or "Tout le stock").strip() or "Tout le stock"
+    notes = (request.form.get("notes") or "").strip() or None
+    try:
+        session = InventorySession(
+            reference=_next_inventory_reference(),
+            scope=scope,
+            status=InventoryStatus.OPEN,
+            responsable_id=current_user.id,
+            notes=notes,
+        )
+        db.session.add(session)
+        db.session.flush()
+
+        for product in Product.query.filter_by(active=True).order_by(Product.name).all():
+            qty = dec(product.stock_qty)
+            db.session.add(
+                InventoryLine(
+                    session_id=session.id,
+                    product_id=product.id,
+                    qty_theorique=qty,
+                    qty_comptee=qty,
+                    ecart=dec("0"),
+                    ecart_valeur=dec("0"),
+                )
+            )
+        log_action(
+            "inventory_create",
+            entity="inventory_session",
+            entity_uuid=session.uuid,
+            after={"reference": session.reference, "scope": scope},
+            commit=False,
+        )
+        db.session.commit()
+        flash(f"Inventaire {session.reference} cree. Saisissez les quantites comptees.", "success")
+        return redirect(url_for("stock.inventory_detail", session_id=session.id))
+    except IntegrityError:
+        db.session.rollback()
+        flash("Conflit de reference d'inventaire. Reessayez.", "warning")
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("stock.inventory_list"))
+
+
+@stock_bp.route("/inventaires/<int:session_id>", methods=["GET", "POST"])
+@login_required
+@permission_required(P.INVENTORY_MANAGE, P.INVENTORY_VALIDATE, mode="any")
+def inventory_detail(session_id):
+    session = (
+        InventorySession.query.options(
+            selectinload(InventorySession.lines)
+            .joinedload(InventoryLine.product)
+            .joinedload(Product.base_unit)
+        )
+        .filter_by(id=session_id)
+        .first()
+    ) or abort(404)
+
+    if request.method == "POST":
+        if session.status == InventoryStatus.VALIDATED:
+            flash("Cet inventaire est deja valide et ne peut plus etre modifie.", "warning")
+            return redirect(url_for("stock.inventory_detail", session_id=session.id))
+
+        try:
+            for line in session.lines:
+                count_raw = (request.form.get(f"count_{line.id}") or "").strip()
+                if count_raw == "":
+                    continue
+                qty = dec(count_raw)
+                if qty < 0:
+                    raise ValueError("Les quantites comptees ne peuvent pas etre negatives.")
+                line.qty_comptee = qty
+                line.ecart = qty - dec(line.qty_theorique)
+                line.ecart_valeur = line.ecart * dec(line.product.cost_avg)
+                line.reason = (request.form.get(f"reason_{line.id}") or "").strip() or None
+            session.status = InventoryStatus.SUBMITTED
+            log_action(
+                "inventory_submit",
+                entity="inventory_session",
+                entity_uuid=session.uuid,
+                after={"reference": session.reference, "status": session.status},
+                commit=False,
+            )
+            db.session.commit()
+            flash(
+                f"Inventaire {session.reference} soumis. En attente de validation.",
+                "success",
+            )
+            return redirect(url_for("stock.inventory_detail", session_id=session.id))
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), "danger")
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            flash(str(exc), "danger")
+
+    return render_template("stock/inventory_detail.html", session=session)
+
+
+@stock_bp.route("/inventaires/<int:session_id>/valider", methods=["POST"])
+@login_required
+@permission_required(P.INVENTORY_VALIDATE)
+def inventory_validate(session_id):
+    session = db.session.get(InventorySession, session_id) or abort(404)
+    if session.status == InventoryStatus.VALIDATED:
+        flash("Cet inventaire est deja valide.", "warning")
+        return redirect(url_for("stock.inventory_detail", session_id=session.id))
+    if session.status != InventoryStatus.SUBMITTED:
+        flash("L'inventaire doit d'abord etre soumis avant validation.", "danger")
+        return redirect(url_for("stock.inventory_detail", session_id=session.id))
+
+    try:
+        stock_service.apply_inventory_validation(
+            session,
+            current_user.id,
+            reason=session.notes,
+            commit=False,
+        )
+        session.status = InventoryStatus.VALIDATED
+        session.validated_by_id = current_user.id
+        session.validated_at = utcnow()
+        log_action(
+            "inventory_validate",
+            entity="inventory_session",
+            entity_uuid=session.uuid,
+            after={"reference": session.reference, "status": session.status},
+            commit=False,
+        )
+        db.session.commit()
+        flash(
+            f"Inventaire {session.reference} valide : les ecarts ont ete appliques au stock.",
+            "success",
+        )
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        flash(str(exc), "danger")
+    return redirect(url_for("stock.inventory_detail", session_id=session.id))
 
 
 @stock_bp.route("/mouvements")

@@ -85,8 +85,22 @@
     <div class="toolbar">
       <a href="{{ url_for('stock.valuation') }}" class="btn ghost sm">Rapport détaillé des valeurs</a>
       {% if current_user.has_permission(P.STOCK_MANAGE) %}<a href="{{ url_for('stock.entry') }}" class="btn sm">+ Entrée / Créer un produit</a>{% endif %}
-    {% if current_user.has_permission(P.LOSS_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Déclarer une perte</a>{% endif %}
-    {% if current_user.has_permission(P.INVENTORY_MANAGE) %}<a href="{{ url_for('stock.index') }}" class="btn ghost sm">Inventaire</a>{% endif %}
+    {% if current_user.has_permission(P.LOSS_MANAGE) %}<a href="{{ url_for('stock.loss') }}" class="btn ghost sm">Déclarer une perte</a>{% endif %}
+    {% if current_user.has_permission(P.INVENTORY_MANAGE) %}<a href="{{ url_for('stock.inventory_list') }}" class="btn ghost sm">Inventaire</a>{% endif %}
+    {% if current_user.has_permission(P.STOCK_MANAGE) %}
+    <details class="stock-refresh" style="display:inline-block">
+      <summary class="btn ghost sm">Actualiser les stocks</summary>
+      <form method="post" action="{{ url_for('stock.refresh_stock') }}" class="card" style="width:340px;margin-top:8px;text-align:left">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p class="sub" style="margin-top:0">Recalcule les quantités depuis les mouvements de stock. Les produits sans mouvement sont conservés.</p>
+        <div class="field">
+          <label for="refresh_owner_password">Mot de passe administrateur / propriétaire</label>
+          <input type="password" id="refresh_owner_password" name="owner_password" autocomplete="current-password" required>
+        </div>
+        <button class="btn sm" type="submit">Actualiser maintenant</button>
+      </form>
+    </details>
+    {% endif %}
     </div>
   </div>
   <div class="table-wrap">
@@ -158,9 +172,6 @@
   </div>
   {{ show_pager(pager) }}
 </div>
-    </table>
-  </div>
-</div>
 <div class="modal" id="restock_modal">
   <div class="modal-dialog" style="max-width:420px">
     <form method="post" id="restock_form" data-preserve-on-error data-preserve-key="stock-restock">
@@ -177,7 +188,7 @@
         </div>
         <div class="field full">
           <label for="restock_qty">Quantité à ajouter</label>
-          <input type="text" id="restock_qty" name="quantity" placeholder="Dans l'unité de base">
+          <input type="text" id="restock_qty" name="quantity" inputmode="decimal" placeholder="Dans l'unité de base">
         </div>
         <div class="field full">
           <label for="restock_cost">Prix d'achat par unité de stock (facultatif)</label>

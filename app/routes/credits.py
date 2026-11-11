@@ -183,6 +183,7 @@ def settle(credit_id):
             reference=request.form.get("reference"),
         )
     except ValueError as exc:
+        db.session.rollback()
         flash(str(exc), "danger")
         return redirect(url_for("credits.detail", credit_id=credit.id))
 

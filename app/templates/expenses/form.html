@@ -3,28 +3,97 @@
 {% block heading %}Nouvelle dépense{% endblock %}
 
 {% block content %}
-<div class="card form-narrow">
-  <h2>Saisir une depense</h2>
-  <p class="sub">La depense est creee en « saisie », puis soumise pour validation.</p>
-  <form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="field"><label for="amount">Montant</label><input type="text" id="amount" name="amount" required></div>
-    <div class="field">
-      <label for="currency">Devise</label>
-      <select id="currency" name="currency"><option value="CDF">CDF</option><option value="USD">USD</option></select>
+<div class="bank-page bank-stack">
+
+  <section class="bank-hero bank-hero--teal">
+    <div class="bank-hero-main">
+      <div class="bank-eyebrow">Dépenses · Saisie</div>
+      <div class="bank-balance-label">Nouvelle sortie de caisse</div>
+      <div class="bank-balance-value" style="font-size:clamp(1.7rem,3vw,2.5rem)">Saisir une dépense</div>
+      <div class="bank-balance-sub">La dépense est créée en « saisie », puis soumise pour validation. Une dépense validée en espèces est déduite de la caisse ouverte.</div>
     </div>
-    <div class="field">
-      <label for="category_id">Categorie</label>
-      <select id="category_id" name="category_id"><option value="">—</option>{% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+    <div class="bank-hero-side">
+      <span class="bank-pill bank-pill--hero">Contrôle</span>
+      <a href="{{ url_for('expenses.index') }}" class="bank-btn bank-btn--hero">Retour au registre</a>
     </div>
-    <div class="field"><label for="motif">Motif</label><input type="text" id="motif" name="motif" required></div>
-    <div class="field"><label for="beneficiary">Beneficiaire</label><input type="text" id="beneficiary" name="beneficiary"></div>
-    <div class="field">
-      <label for="method">Moyen de paiement</label>
-      <select id="method" name="method">{% for code, label in methods.items() %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select>
+  </section>
+
+  <div class="bank-split">
+    <div class="bank-card bank-card--accent">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Informations de la dépense</h2>
+          <p class="bank-card-sub">Renseignez le montant, le motif et le bénéficiaire.</p>
+        </div>
+      </div>
+      <form method="post" class="bank-form bank-form--2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="bank-field">
+          <label for="amount">Montant</label>
+          <input type="text" id="amount" name="amount" inputmode="decimal" class="bank-input-lg"
+                 value="{{ form.get('amount') or '' }}" placeholder="0,00" required>
+        </div>
+        <div class="bank-field">
+          <label for="currency">Devise</label>
+          <select id="currency" name="currency">
+            {% for c in currencies %}<option value="{{ c }}" {{ 'selected' if (form.get('currency') or 'CDF') == c }}>{{ c }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="bank-field">
+          <label for="category_id">Catégorie</label>
+          <select id="category_id" name="category_id">
+            <option value="">— Sans catégorie —</option>
+            {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if form.get('category_id') == c.id|string }}>{{ c.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="bank-field">
+          <label for="method">Moyen de paiement</label>
+          <select id="method" name="method">
+            {% for code, label in methods.items() %}<option value="{{ code }}" {{ 'selected' if (form.get('method') or 'espece') == code }}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="bank-field" style="grid-column:1 / -1">
+          <label for="motif">Motif</label>
+          <input type="text" id="motif" name="motif" value="{{ form.get('motif') or '' }}" placeholder="Ex. achat de fournitures, transport…" required>
+        </div>
+        <div class="bank-field" style="grid-column:1 / -1">
+          <label for="beneficiary">Bénéficiaire</label>
+          <input type="text" id="beneficiary" name="beneficiary" value="{{ form.get('beneficiary') or '' }}" placeholder="Nom du bénéficiaire ou fournisseur">
+        </div>
+        <div class="bank-field" style="grid-column:1 / -1">
+          <label for="notes">Notes</label>
+          <textarea id="notes" name="notes" rows="3" placeholder="Détails complémentaires (facultatif)">{{ form.get('notes') or '' }}</textarea>
+        </div>
+
+        <div class="bank-actions" style="grid-column:1 / -1">
+          <button class="bank-btn bank-btn--primary" type="submit">Enregistrer la dépense</button>
+          <a href="{{ url_for('expenses.index') }}" class="bank-btn bank-btn--ghost">Annuler</a>
+        </div>
+      </form>
     </div>
-    <div class="field"><label for="notes">Notes</label><textarea id="notes" name="notes" rows="2"></textarea></div>
-    <div class="row"><button class="btn" type="submit">Enregistrer</button><a href="{{ url_for('expenses.index') }}" class="btn ghost">Annuler</a></div>
-  </form>
+
+    <div class="bank-card">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Bon à savoir</h2>
+          <p class="bank-card-sub">Sécurité et impact sur la caisse.</p>
+        </div>
+      </div>
+      <div class="bank-stack" style="gap:12px">
+        <div class="bank-alert bank-alert--info">
+          La dépense reste en <strong>saisie</strong> jusqu'à sa soumission puis sa validation.
+        </div>
+        <div class="bank-alert bank-alert--warn">
+          À la validation, si le paiement est en <strong>espèces</strong> et qu'une caisse est ouverte, le montant est déduit automatiquement. Si le solde est insuffisant, la validation est refusée.
+        </div>
+        <div class="bank-alert bank-alert--danger">
+          Une caisse ne peut jamais afficher un solde négatif. Corrigez d'abord les mouvements erronés si nécessaire.
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

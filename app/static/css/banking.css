@@ -1,0 +1,383 @@
+/* BoutiqueGest — interface bancaire (Caisse / Depenses)
+   Palette alignee sur AVPH_SYSTEM : marine, teal, fond clair, cartes blanches. */
+.bank-page {
+  --bank-navy: #183153;
+  --bank-navy-deep: #10233c;
+  --bank-teal: #168b8c;
+  --bank-teal-dark: #0f6f70;
+  --bank-teal-soft: #e6f4f4;
+  --bank-canvas: #f4f6f9;
+  --bank-ink: #172033;
+  --bank-muted: #6b7a90;
+  --bank-line: #e3e8ef;
+  --bank-success: #0f8a5f;
+  --bank-warning: #b26a00;
+  --bank-danger: #c0392b;
+  color: var(--bank-ink);
+}
+
+.bank-page * { box-sizing: border-box; }
+
+.bank-page .bank-stack { display: flex; flex-direction: column; gap: 16px; }
+
+/* ------------------------------------------------------------- Hero solde */
+.bank-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding: 28px 30px;
+  border-radius: 20px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 82% -20%, rgba(22, 139, 140, .55), transparent 46%),
+    linear-gradient(135deg, #183153 0%, #10233c 100%);
+  box-shadow: 0 18px 40px -24px rgba(16, 35, 60, .85);
+}
+.bank-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(120deg, transparent 35%, #000 100%);
+}
+.bank-hero--teal {
+  background:
+    radial-gradient(circle at 82% -20%, rgba(255, 255, 255, .22), transparent 46%),
+    linear-gradient(135deg, #0f5f63 0%, #168b8c 100%);
+}
+.bank-hero > * { position: relative; z-index: 1; }
+.bank-hero-main { min-width: 260px; flex: 1; }
+.bank-hero-side {
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+.bank-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: .16em;
+  font-size: .7rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, .62);
+}
+.bank-balance-label {
+  margin-top: 10px;
+  font-size: .88rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, .78);
+}
+.bank-balance-value {
+  margin: 2px 0 0;
+  font-size: clamp(2.1rem, 4.4vw, 3.5rem);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+}
+.bank-balance-value.is-negative { color: #ffb4a8; }
+.bank-balance-currency { font-size: .55em; font-weight: 700; letter-spacing: 0; opacity: .8; }
+.bank-balance-sub {
+  margin-top: 8px;
+  font-size: .86rem;
+  color: rgba(255, 255, 255, .74);
+}
+.bank-hero .bank-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 16px;
+  font-size: .82rem;
+  color: rgba(255, 255, 255, .8);
+}
+.bank-hero .bank-hero-meta strong { color: #fff; }
+
+/* ------------------------------------------------------------- Pastilles */
+.bank-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  background: #eef2f7;
+  color: #42536b;
+}
+.bank-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .75;
+}
+.bank-pill--ok { background: #e7f7ef; color: var(--bank-success); }
+.bank-pill--warn { background: #fdf3e2; color: var(--bank-warning); }
+.bank-pill--danger { background: #fdecea; color: var(--bank-danger); }
+.bank-pill--info { background: var(--bank-teal-soft); color: var(--bank-teal-dark); }
+.bank-pill--hero {
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+
+/* ------------------------------------------------------------- Grilles */
+.bank-grid { display: grid; gap: 16px; }
+.bank-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bank-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bank-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.bank-split { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 16px; }
+
+/* ------------------------------------------------------------- Cartes */
+.bank-card {
+  background: #fff;
+  border: 1px solid var(--bank-line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(16, 35, 60, .04);
+}
+.bank-card--flush { padding: 0; overflow: hidden; }
+.bank-card--accent { border-top: 3px solid var(--bank-teal); }
+.bank-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.bank-card--flush .bank-card-head { padding: 20px 20px 0; margin-bottom: 14px; }
+.bank-card-title { margin: 0; font-size: 1.02rem; font-weight: 750; letter-spacing: -.01em; }
+.bank-card-sub { margin: 5px 0 0; font-size: .84rem; color: var(--bank-muted); }
+.bank-card-sub a { color: var(--bank-teal-dark); font-weight: 600; }
+
+/* ------------------------------------------------------------- Statistiques */
+.bank-stat { display: flex; flex-direction: column; gap: 4px; }
+.bank-stat-label {
+  font-size: .73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--bank-muted);
+}
+.bank-stat-value {
+  font-size: 1.42rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.bank-stat-value--in { color: var(--bank-success); }
+.bank-stat-value--out { color: var(--bank-danger); }
+.bank-stat-value--muted { color: var(--bank-muted); font-size: 1.1rem; }
+.bank-stat-foot { font-size: .78rem; color: var(--bank-muted); }
+
+/* ------------------------------------------------------------- Barre flux */
+.bank-flow {
+  display: flex;
+  height: 9px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #edf1f6;
+  margin-top: 14px;
+}
+.bank-flow-in { height: 100%; background: linear-gradient(90deg, #1aa57a, #168b8c); }
+.bank-flow-out { height: 100%; background: linear-gradient(90deg, #e07a5f, #c0392b); }
+
+/* ------------------------------------------------------------- Tableaux */
+.bank-table-wrap { overflow-x: auto; }
+.bank-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.bank-table thead th {
+  padding: 11px 16px;
+  text-align: left;
+  font-size: .69rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--bank-muted);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--bank-line);
+  white-space: nowrap;
+}
+.bank-table tbody td {
+  padding: 13px 16px;
+  border-bottom: 1px solid #eef2f6;
+  vertical-align: middle;
+}
+.bank-table tbody tr:last-child td { border-bottom: 0; }
+.bank-table tbody tr:hover { background: #f9fcfd; }
+.bank-table .num { text-align: right; }
+.bank-amount {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bank-amount--in { color: var(--bank-success); }
+.bank-amount--out { color: var(--bank-danger); }
+.bank-amount small { display: block; font-weight: 500; color: var(--bank-muted); font-size: .74rem; }
+.bank-ref { font-weight: 700; letter-spacing: .01em; }
+.bank-muted { color: var(--bank-muted); }
+.bank-empty { padding: 30px 20px; text-align: center; color: var(--bank-muted); font-size: .88rem; }
+
+/* ------------------------------------------------------------- Boutons */
+.bank-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bank-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 15px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  white-space: nowrap;
+}
+.bank-btn:hover { text-decoration: none; transform: translateY(-1px); }
+.bank-btn:active { transform: translateY(0); }
+.bank-btn--primary { background: var(--bank-teal); color: #fff; box-shadow: 0 8px 18px -12px rgba(22, 139, 140, .9); }
+.bank-btn--primary:hover { background: var(--bank-teal-dark); color: #fff; }
+.bank-btn--navy { background: var(--bank-navy); color: #fff; }
+.bank-btn--navy:hover { background: var(--bank-navy-deep); color: #fff; }
+.bank-btn--ghost { background: #fff; border-color: var(--bank-line); color: var(--bank-navy); }
+.bank-btn--ghost:hover { border-color: #c9d3e0; background: #f8fafc; color: var(--bank-navy); }
+.bank-btn--hero { background: rgba(255, 255, 255, .16); color: #fff; border-color: rgba(255, 255, 255, .28); }
+.bank-btn--hero:hover { background: rgba(255, 255, 255, .24); color: #fff; }
+.bank-btn--danger { background: #fdecea; color: var(--bank-danger); border-color: #f6c9c3; }
+.bank-btn--danger:hover { background: #fbdcd7; color: var(--bank-danger); }
+.bank-btn--sm { padding: 7px 11px; font-size: .79rem; border-radius: 9px; }
+.bank-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--bank-teal-dark);
+  cursor: pointer;
+}
+.bank-link:hover { text-decoration: underline; }
+.bank-link--danger { color: var(--bank-danger); }
+
+/* ------------------------------------------------------------- Formulaires */
+.bank-form { display: grid; gap: 13px; }
+.bank-form--inline { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; }
+.bank-form--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bank-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bank-field > label {
+  font-size: .76rem;
+  font-weight: 700;
+  color: var(--bank-muted);
+}
+.bank-field input,
+.bank-field select,
+.bank-field textarea {
+  width: 100%;
+  border: 1px solid var(--bank-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: .88rem;
+  color: var(--bank-ink);
+  background: #fff;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.bank-field input:focus,
+.bank-field select:focus,
+.bank-field textarea:focus {
+  outline: none;
+  border-color: var(--bank-teal);
+  box-shadow: 0 0 0 3px rgba(22, 139, 140, .16);
+}
+.bank-field .bank-input-lg {
+  font-size: 1.25rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  padding: 12px 14px;
+}
+.bank-help { font-size: .77rem; color: var(--bank-muted); }
+.bank-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bank-sep { height: 1px; background: var(--bank-line); margin: 14px 0; }
+
+/* ------------------------------------------------------------- Alertes */
+.bank-alert {
+  padding: 13px 15px;
+  border-radius: 12px;
+  font-size: .86rem;
+  border: 1px solid transparent;
+}
+.bank-alert--info { background: var(--bank-teal-soft); color: #0b5c5d; border-color: #c9e7e7; }
+.bank-alert--warn { background: #fdf3e2; color: #7a4a00; border-color: #f2ddb7; }
+.bank-alert--danger { background: #fdecea; color: #8a1f14; border-color: #f6c9c3; }
+.bank-alert strong { font-weight: 800; }
+
+/* ------------------------------------------------------------- Correction */
+.bank-correction {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px dashed #cbd6e2;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.bank-correction .bank-form { gap: 10px; }
+.bank-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--bank-teal-dark);
+  font-size: .82rem;
+  list-style: none;
+}
+.bank-details summary::-webkit-details-marker { display: none; }
+.bank-details summary::before { content: "▸ "; }
+.bank-details[open] summary::before { content: "▾ "; }
+
+/* Actualisation du stock (page Stock, hors .bank-page) */
+.stock-refresh summary { list-style: none; cursor: pointer; }
+.stock-refresh summary::-webkit-details-marker { display: none; }
+.stock-refresh[open] summary { background: #eef2f7; }
+
+/* ------------------------------------------------------------- Divers */
+.bank-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: #f1f5f9;
+  color: #43536b;
+  font-size: .73rem;
+  font-weight: 700;
+}
+.bank-divider { height: 1px; background: var(--bank-line); margin: 18px 0; }
+.bank-hero .bank-divider { background: rgba(255, 255, 255, .16); }
+.bank-strong { font-weight: 800; }
+.bank-right { text-align: right; }
+.bank-nowrap { white-space: nowrap; }
+
+@media (max-width: 1040px) {
+  .bank-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bank-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bank-split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .bank-grid--2,
+  .bank-grid--3,
+  .bank-grid--4 { grid-template-columns: minmax(0, 1fr); }
+  .bank-form--2 { grid-template-columns: minmax(0, 1fr); }
+  .bank-hero { padding: 22px; }
+  .bank-hero-side { align-items: flex-start; }
+  .bank-card { padding: 16px; }
+  .bank-card--flush .bank-card-head { padding: 16px 16px 0; }
+}

@@ -4,83 +4,266 @@
 {% block heading %}Caisse{% endblock %}
 
 {% block content %}
-<div class="grid cols-3">
-  {% if own_session %}
-  <div class="card">
-    <h2>Ma caisse ouverte</h2>
-    <p class="sub">{{ own_session.register.name }} · {{ own_session.currency }}</p>
-    <div class="kpi">
-      <span class="label">Fond de caisse initial</span>
-      <span class="value">{{ own_session.solde_initial | num }} {{ own_session.currency }}</span>
-      <span class="foot">
-        {% if rate and rate.rate and own_session.currency == 'CDF' %}≈ {{ (own_session.solde_initial / rate.rate) | round(2) }} $ · {% elif rate and rate.rate and own_session.currency == 'USD' %}≈ {{ (own_session.solde_initial * rate.rate) | round(2) }} FC · {% endif %}
-        Ouverte le {{ own_session.opened_at.strftime('%d/%m/%Y %H:%M') }}
-      </span>
-    </div>
-    <div class="row mt-16">
-      <a href="{{ url_for('cash.session_detail', session_id=own_session.id) }}" class="btn">Voir la caisse</a>
-      {% if current_user.has_permission(P.SALES_CREATE) %}
-      <a href="{{ url_for('pos.index') }}" class="btn ghost">Vendre</a>
+<div class="bank-page bank-stack">
+
+  <section class="bank-hero">
+    <div class="bank-hero-main">
+      <div class="bank-eyebrow">Trésorerie · Caisse</div>
+      {% if own_session %}
+        <div class="bank-balance-label">Solde disponible — {{ own_session.register.name }}</div>
+        <div class="bank-balance-value {{ 'is-negative' if own_summary.solde < 0 }}">
+          {{ own_summary.solde | num }} <span class="bank-balance-currency">{{ own_session.currency }}</span>
+        </div>
+        <div class="bank-balance-sub">
+          {% if rate and rate.rate and own_session.currency == 'CDF' %}
+            ≈ {{ (own_summary.solde / rate.rate) | round(2) }} $ · taux 1 USD = {{ rate.rate }} CDF
+          {% elif rate and rate.rate and own_session.currency == 'USD' %}
+            ≈ {{ (own_summary.solde * rate.rate) | round(2) }} FC · taux 1 USD = {{ rate.rate }} CDF
+          {% else %}
+            Fond initial {{ own_session.solde_initial | num }} {{ own_session.currency }}
+          {% endif %}
+        </div>
+        <div class="bank-hero-meta">
+          <span>Ouverte le <strong>{{ own_session.opened_at.strftime('%d/%m/%Y %H:%M') }}</strong></span>
+          <span>Vendeur <strong>{{ own_session.vendeur.full_name if own_session.vendeur else '—' }}</strong></span>
+          <span><strong>{{ own_summary.operations }}</strong> opération(s)</span>
+        </div>
+      {% elif open_sessions %}
+        <div class="bank-balance-label">Trésorerie des caisses ouvertes</div>
+        {% for cur, total in open_totals.items() %}
+          <div class="bank-balance-value {{ 'is-negative' if total < 0 }}">
+            {{ total | num }} <span class="bank-balance-currency">{{ cur }}</span>
+          </div>
+        {% endfor %}
+        <div class="bank-balance-sub">{{ open_sessions|length }} caisse(s) ouverte(s) sur {{ registers|length }} configurée(s).</div>
+      {% else %}
+        <div class="bank-balance-label">Aucune caisse ouverte</div>
+        <div class="bank-balance-value">0 <span class="bank-balance-currency">{{ registers[0].currency if registers else 'CDF' }}</span></div>
+        <div class="bank-balance-sub">Ouvrez une caisse pour commencer à encaisser et suivre le tiroir.</div>
       {% endif %}
     </div>
-  </div>
-  {% elif registers %}
-  <div class="card">
-    <h2>Ouvrir une caisse</h2>
-    <p class="sub">Saisissez le fond de caisse present dans le tiroir au demarrage.</p>
-    <form method="post" action="{{ url_for('cash.open_session') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label for="register_id">Caisse</label>
-        <select id="register_id" name="register_id" required>
-          {% for r in registers %}<option value="{{ r.id }}">{{ r.name }} ({{ r.currency }})</option>{% endfor %}
-        </select>
-      </div>
-      <div class="field">
-        <label for="solde_initial">Fond de caisse initial</label>
-        <input type="text" id="solde_initial" name="solde_initial" value="0">
-      </div>
-      <button class="btn" type="submit">Ouvrir</button>
-    </form>
-  </div>
-  {% else %}
-  <div class="card">
-    <h2>Aucune caisse configurée</h2>
-    <p class="sub">Contactez l'administrateur pour creer une caisse.</p>
+    <div class="bank-hero-side">
+      {% if own_session %}
+        <span class="bank-pill bank-pill--hero">Caisse ouverte</span>
+        <div class="bank-actions" style="justify-content:flex-end">
+          <a href="{{ url_for('cash.session_detail', session_id=own_session.id) }}" class="bank-btn bank-btn--hero">Ouvrir le tiroir</a>
+          {% if current_user.has_permission(P.SALES_CREATE) %}
+          <a href="{{ url_for('pos.index') }}" class="bank-btn bank-btn--hero">Vendre</a>
+          {% endif %}
+        </div>
+      {% elif registers and current_user.has_permission(P.CASH_OPEN) %}
+        <span class="bank-pill bank-pill--hero">{{ registers|length }} caisse(s) disponible(s)</span>
+      {% else %}
+        <span class="bank-pill bank-pill--hero">Consultation</span>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if own_summary and own_summary.solde < 0 %}
+  <div class="bank-alert bank-alert--danger">
+    <strong>Solde négatif détecté.</strong>
+    Une opération a retiré plus que le solde disponible. Ouvrez la session et utilisez
+    « Corriger » sur le mouvement concerné : la caisse sera rééquilibrée automatiquement,
+    avec mot de passe administrateur.
   </div>
   {% endif %}
-</div>
 
-<div class="card">
-  <div class="row between">
-    <h2>{{ 'Toutes les sessions' if current_user.has_permission(P.CASH_VIEW_ALL) else 'Mes sessions' }}</h2>
-    {% if rate %}<span class="sub">Taux : 1 USD = {{ rate.rate }} CDF — affichage double devise disponible. <a href="{{ url_for('admin.settings') }}">Paramètres</a></span>{% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<span class="sub"><a href="{{ url_for('admin.settings') }}">Paramètres</a> : configurez le taux pour afficher USD/FC.</span>{% endif %}
+  {% if own_summary %}
+  <div class="bank-grid bank-grid--4">
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Fond initial</span>
+        <span class="bank-stat-value">{{ own_summary.solde_initial | num }} <small style="font-size:.6em;font-weight:600">{{ own_session.currency }}</small></span>
+        <span class="bank-stat-foot">Montant présent à l'ouverture</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Entrées</span>
+        <span class="bank-stat-value bank-stat-value--in">+{{ own_summary.entrees | num }} <small style="font-size:.6em;font-weight:600">{{ own_session.currency }}</small></span>
+        <span class="bank-stat-foot">Ventes, apports, recouvrements</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Sorties</span>
+        <span class="bank-stat-value bank-stat-value--out">−{{ own_summary.sorties | num }} <small style="font-size:.6em;font-weight:600">{{ own_session.currency }}</small></span>
+        <span class="bank-stat-foot">Dépenses, retraits, règlements</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Opérations</span>
+        <span class="bank-stat-value">{{ own_summary.operations }}</span>
+        <span class="bank-stat-foot">Mouvements enregistrés</span>
+      </div>
+    </div>
   </div>
-  <div class="table-wrap">
-    <table class="table">
-      <thead><tr><th>Ouverte le</th><th>Caisse</th><th>Vendeur</th><th>Theorique</th><th>Compte</th><th>Ecart</th><th>Statut</th><th></th></tr></thead>
-      <tbody>
-        {% for s in sessions %}
-        <tr>
-          <td>{{ s.opened_at.strftime('%d/%m/%Y %H:%M') }}</td>
-          <td>{{ s.register.name }} <span class="pill">{{ s.currency }}</span></td>
-          <td>{{ s.vendeur.full_name }}</td>
-          <td>{{ s.compute_theorique() | num }}</td>
-          <td>{{ s.solde_compte | num if s.solde_compte is not none else '—' }}</td>
-          <td>{% if s.status == 'validee' %}<span class="{{ 'badge green' if s.ecart == 0 else 'badge red' }}">{{ s.ecart | num }}</span>{% else %}—{% endif %}</td>
-          <td>
-            {% if s.status == 'validee' %}<span class="badge green">Validee</span>
-            {% elif s.status == 'soumise' %}<span class="badge amber">Soumise</span>
-            {% else %}<span class="badge gray">Ouverte</span>{% endif %}
-          </td>
-          <td><a class="btn ghost sm" href="{{ url_for('cash.session_detail', session_id=s.id) }}">Ouvrir</a></td>
-        </tr>
+
+  {% set total_flow = (own_summary.entrees + own_summary.sorties) %}
+  <div class="bank-card">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Flux de la caisse</h2>
+        <p class="bank-card-sub">Répartition entre encaissements et décaissements de la session ouverte.</p>
+      </div>
+      <span class="bank-pill bank-pill--info">{{ own_session.currency }}</span>
+    </div>
+    <div class="bank-flow" title="Entrées / sorties">
+      <div class="bank-flow-in" style="width: {{ (own_summary.entrees / total_flow * 100) | round(1) if total_flow else 0 }}%"></div>
+      <div class="bank-flow-out" style="width: {{ (own_summary.sorties / total_flow * 100) | round(1) if total_flow else 0 }}%"></div>
+    </div>
+    <div class="bank-inline" style="justify-content:space-between;margin-top:10px">
+      <span class="bank-help"><span class="bank-pill bank-pill--ok">Entrées</span> {{ own_summary.entrees | num }} {{ own_session.currency }}</span>
+      <span class="bank-help"><span class="bank-pill bank-pill--danger">Sorties</span> {{ own_summary.sorties | num }} {{ own_session.currency }}</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="bank-split">
+    {% if not own_session and registers and current_user.has_permission(P.CASH_OPEN) %}
+    <div class="bank-card bank-card--accent">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Ouvrir une caisse</h2>
+          <p class="bank-card-sub">Saisissez le fond de caisse réellement présent dans le tiroir au démarrage.</p>
+        </div>
+        <span class="bank-pill bank-pill--info">Nouvelle session</span>
+      </div>
+      <form method="post" action="{{ url_for('cash.open_session') }}" class="bank-form bank-form--2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="bank-field">
+          <label for="register_id">Caisse</label>
+          <select id="register_id" name="register_id" required>
+            {% for r in registers %}<option value="{{ r.id }}">{{ r.name }} ({{ r.currency }})</option>{% endfor %}
+          </select>
+        </div>
+        <div class="bank-field">
+          <label for="solde_initial">Fond de caisse initial</label>
+          <input type="text" id="solde_initial" name="solde_initial" value="0" inputmode="decimal" class="bank-input-lg">
+        </div>
+        <div class="bank-actions" style="grid-column:1 / -1">
+          <button class="bank-btn bank-btn--primary" type="submit">Ouvrir la caisse</button>
+          <span class="bank-help">Le fond initial ne peut pas être négatif.</span>
+        </div>
+      </form>
+    </div>
+    {% elif own_session %}
+    <div class="bank-card">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Votre caisse</h2>
+          <p class="bank-card-sub">{{ own_session.register.name }} · {{ own_session.currency }} · ouverte le {{ own_session.opened_at.strftime('%d/%m/%Y à %H:%M') }}</p>
+        </div>
+        <span class="bank-pill bank-pill--ok">Ouverte</span>
+      </div>
+      <div class="bank-grid bank-grid--2">
+        <div class="bank-stat">
+          <span class="bank-stat-label">Solde théorique</span>
+          <span class="bank-stat-value">{{ own_summary.solde | num }} {{ own_session.currency }}</span>
+        </div>
+        <div class="bank-stat">
+          <span class="bank-stat-label">Dernière ouverture</span>
+          <span class="bank-stat-value bank-stat-value--muted">{{ own_session.opened_at.strftime('%d/%m/%Y') }}</span>
+        </div>
+      </div>
+      <div class="bank-divider"></div>
+      <div class="bank-actions">
+        <a href="{{ url_for('cash.session_detail', session_id=own_session.id) }}" class="bank-btn bank-btn--primary">Gérer les mouvements</a>
+        {% if current_user.has_permission(P.SALES_CREATE) %}
+        <a href="{{ url_for('pos.index') }}" class="bank-btn bank-btn--ghost">Aller au point de vente</a>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="bank-card">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Consultation des caisses</h2>
+          <p class="bank-card-sub">Vous pouvez consulter les sessions. L'ouverture d'une caisse est réservée aux utilisateurs autorisés.</p>
+        </div>
+      </div>
+      <div class="bank-alert bank-alert--info">Aucune action d'encaissement n'est disponible avec votre profil.</div>
+    </div>
+    {% endif %}
+
+    <div class="bank-card">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Caisses ouvertes</h2>
+          <p class="bank-card-sub">Sessions en cours et soldes disponibles.</p>
+        </div>
+        <span class="bank-pill">{{ open_sessions|length }}</span>
+      </div>
+      <div class="bank-stack" style="gap:10px">
+        {% for s in open_sessions %}
+        <div class="bank-inline" style="justify-content:space-between;border:1px solid var(--bank-line);border-radius:12px;padding:11px 13px">
+          <div>
+            <div class="bank-strong">{{ s.register.name if s.register else '—' }}</div>
+            <div class="bank-help">{{ s.vendeur.full_name if s.vendeur else '—' }} · {{ s.currency }}</div>
+          </div>
+          <div class="bank-right">
+            <div class="bank-amount {{ 'bank-amount--out' if s.display_theorique < 0 }}">{{ s.display_theorique | num }} <small>{{ s.currency }}</small></div>
+            <a href="{{ url_for('cash.session_detail', session_id=s.id) }}" class="bank-link">Ouvrir</a>
+          </div>
+        </div>
         {% else %}
-        <tr><td colspan="8" class="muted">Aucune session.</td></tr>
+        <div class="bank-empty">Aucune caisse ouverte pour le moment.</div>
         {% endfor %}
-      </tbody>
-    </table>
-    {{ show_pager(pager) }}
+      </div>
+    </div>
+  </div>
+
+  <div class="bank-card bank-card--flush">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">{{ 'Toutes les sessions' if current_user.has_permission(P.CASH_VIEW_ALL) else 'Mes sessions' }}</h2>
+        <p class="bank-card-sub">
+          {% if rate %}Taux : 1 USD = {{ rate.rate }} CDF — affichage double devise disponible. <a href="{{ url_for('admin.settings') }}">Paramètres</a>{% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.settings') }}">Paramètres</a> : configurez le taux pour afficher USD/FC.{% else %}Historique des sessions de caisse.{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="bank-table-wrap">
+      <table class="bank-table">
+        <thead>
+          <tr>
+            <th>Ouverte le</th>
+            <th>Caisse</th>
+            <th>Vendeur</th>
+            <th class="num">Théorique</th>
+            <th class="num">Compté</th>
+            <th class="num">Écart</th>
+            <th>Statut</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sessions %}
+          <tr>
+            <td class="bank-nowrap">{{ s.opened_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td><span class="bank-ref">{{ s.register.name if s.register else '—' }}</span> <span class="bank-chip">{{ s.currency }}</span></td>
+            <td>{{ s.vendeur.full_name if s.vendeur else '—' }}</td>
+            <td class="num bank-amount">{{ s.display_theorique | num }} <small>{{ s.currency }}</small></td>
+            <td class="num bank-amount">{{ s.solde_compte | num if s.solde_compte is not none else '—' }}</td>
+            <td class="num">
+              {% if s.status == 'validee' %}
+                <span class="bank-pill {{ 'bank-pill--ok' if s.ecart == 0 else 'bank-pill--danger' }}">{{ s.ecart | num }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if s.status == 'validee' %}<span class="bank-pill bank-pill--ok">Validée</span>
+              {% elif s.status == 'soumise' %}<span class="bank-pill bank-pill--warn">Soumise</span>
+              {% else %}<span class="bank-pill bank-pill--info">Ouverte</span>{% endif %}
+            </td>
+            <td class="bank-right"><a class="bank-btn bank-btn--ghost bank-btn--sm" href="{{ url_for('cash.session_detail', session_id=s.id) }}">Ouvrir</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="bank-empty">Aucune session enregistrée.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:0 16px 14px">{{ show_pager(pager) }}</div>
   </div>
 </div>
 {% endblock %}

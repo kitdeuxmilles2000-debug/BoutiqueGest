@@ -98,7 +98,12 @@ def cancel(sale_id):
         return redirect(url_for("sales.detail", sale_id=sale.id))
 
     restock = bool(request.form.get("restock"))
-    sales_service.cancel_sale(sale, current_user.id, reason, restock=restock)
+    try:
+        sales_service.cancel_sale(sale, current_user.id, reason, restock=restock)
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for("sales.detail", sale_id=sale.id))
     log_action(
         "sale_cancel",
         entity="sale",
@@ -136,6 +141,7 @@ def refund(sale_id):
             sale, current_user.id, amount, method, motif, restock=restock
         )
     except ValueError as exc:
+        db.session.rollback()
         flash(str(exc), "danger")
         return redirect(url_for("sales.detail", sale_id=sale.id))
 

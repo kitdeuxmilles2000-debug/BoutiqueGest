@@ -1,67 +1,169 @@
 {% extends "base.html" %}
+{% from "_macros.html" import show_pager %}
 {% block title %}Dépenses{% endblock %}
 {% block heading %}Dépenses{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-head">
-    <div>
-      <h2>Dépenses</h2>
-      <p class="sub">{{ expenses|length }} dépense(s) affichée(s). {% set xr = exchange_rate or rate %}{% if xr %}Taux : 1 USD = {{ xr.rate }} CDF — montants affichés en $ et en FC. <a href="{{ url_for('admin.settings') }}">Paramètres</a>{% elif current_user.has_permission(P.SETTINGS_MANAGE) %}<a href="{{ url_for('admin.settings') }}">Paramètres</a> : configurez le taux pour voir les équivalents $/FC.{% endif %}</p>
-    </div>
-    <div class="toolbar">
-      {% if current_user.has_permission(P.EXPENSES_CREATE) %}<a href="{{ url_for('expenses.new') }}" class="btn sm">+ Nouvelle dépense</a>{% endif %}
-    </div>
-  </div>
+<div class="bank-page bank-stack">
 
-  <form method="get" class="row" style="gap:8px">
-    <select name="status" class="input">
-      <option value="">Tous les statuts</option>
-      {% for code, label in labels.items() %}<option value="{{ code }}" {{ 'selected' if status == code }}>{{ label }}</option>{% endfor %}
-    </select>
-    <button class="btn sm" type="submit">Filtrer</button>
-    <a href="{{ url_for('expenses.index') }}" class="btn ghost sm">Effacer</a>
-  </form>
-
-  <div class="table-wrap mt-16">
-    <table class="table">
-      <thead><tr><th>Reference</th><th>Date</th><th>Motif</th><th>Categorie</th><th>Beneficiaire</th><th class="num">Montant</th><th>Statut</th><th></th></tr></thead>
-      <tbody>
-        {% for e in expenses %}
-        <tr>
-          <td><strong>{{ e.reference }}</strong></td>
-          <td>{{ e.expense_date.strftime('%d/%m/%Y') }}</td>
-          <td>{{ e.motif }}</td>
-          <td>{{ e.category.name if e.category else '—' }}</td>
-          <td>{{ e.beneficiary or '—' }}</td>
-          <td>{{ e.amount | num }} {{ e.currency }}{% set xr = exchange_rate or rate %}{% if xr and e.currency == 'CDF' %} <span class="muted">(≈ {{ (e.amount / xr.rate) | round(2) }} $)</span>{% elif xr and e.currency == 'USD' %} <span class="muted">(≈ {{ (e.amount * xr.rate) | round(2) }} FC)</span>{% endif %}</td>
-          <td>
-            {% if e.status == 'validee' %}<span class="badge green">Validee</span>
-            {% elif e.status == 'en_attente' %}<span class="badge amber">En attente</span>
-            {% elif e.status == 'rejetee' %}<span class="badge red">Rejetee</span>
-            {% else %}<span class="badge gray">Saisie</span>{% endif %}
-          </td>
-          <td><a class="btn ghost sm" href="{{ url_for('expenses.detail', expense_id=e.id) }}">Ouvrir</a></td>
-        </tr>
-        {% else %}
-        <tr><td colspan="8" class="muted">Aucune depense.</td></tr>
+  <section class="bank-hero">
+    <div class="bank-hero-main">
+      <div class="bank-eyebrow">Dépenses · Pilotage</div>
+      <div class="bank-balance-label">Dépenses validées</div>
+      {% if totals %}
+        {% for cur, t in totals.items() %}
+        <div class="bank-balance-value">{{ t.validee | num }} <span class="bank-balance-currency">{{ cur }}</span></div>
         {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+      {% else %}
+        <div class="bank-balance-value">0 <span class="bank-balance-currency">CDF</span></div>
+      {% endif %}
+      <div class="bank-balance-sub">
+        {{ status_counts.values() | sum }} dossier(s) · {{ status_counts.get('en_attente', 0) }} en attente de validation.
+        {% if rate %}Taux : 1 USD = {{ rate.rate }} CDF — montants affichés en $ et en FC.{% endif %}
+      </div>
+    </div>
+    <div class="bank-hero-side">
+      <span class="bank-pill bank-pill--hero">Contrôle des sorties</span>
+      <div class="bank-actions" style="justify-content:flex-end">
+        {% if current_user.has_permission(P.EXPENSES_CREATE) %}
+        <a href="{{ url_for('expenses.new') }}" class="bank-btn bank-btn--hero">+ Nouvelle dépense</a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
 
-{% if current_user.has_permission(P.EXPENSES_VALIDATE) %}
-<div class="card">
-  <h2>Categories de depense</h2>
-  <p class="sub">
-    {% for c in categories %}<span class="badge blue">{{ c.name }}</span> {% else %}<span class="muted">Aucune categorie.</span>{% endfor %}
-  </p>
-  <form method="post" action="{{ url_for('expenses.add_category') }}" class="row" style="gap:8px">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="text" name="name" class="input" placeholder="Nouvelle catégorie">
-    <button class="btn sm" type="submit">Ajouter</button>
-  </form>
+  <div class="bank-grid bank-grid--4">
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Validées</span>
+        <span class="bank-stat-value bank-stat-value--out">
+          {% if totals %}{% for cur, t in totals.items() %}{{ t.validee | num }} {{ cur }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}0 CDF{% endif %}
+        </span>
+        <span class="bank-stat-foot">{{ status_counts.get('validee', 0) }} dépense(s) validée(s)</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">En attente</span>
+        <span class="bank-stat-value" style="color:var(--bank-warning)">
+          {% if totals %}{% for cur, t in totals.items() %}{{ t.en_attente | num }} {{ cur }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}0 CDF{% endif %}
+        </span>
+        <span class="bank-stat-foot">{{ status_counts.get('en_attente', 0) }} à valider</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Dossiers</span>
+        <span class="bank-stat-value">{{ status_counts.values() | sum }}</span>
+        <span class="bank-stat-foot">{{ status_counts.get('saisie', 0) }} en saisie · {{ status_counts.get('rejetee', 0) }} rejetée(s)</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Catégories</span>
+        <span class="bank-stat-value">{{ categories|length }}</span>
+        <span class="bank-stat-foot">Classement des dépenses</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="bank-card">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Filtrer les dépenses</h2>
+        <p class="bank-card-sub">Retrouvez rapidement un dossier par statut.</p>
+      </div>
+      <span class="bank-pill bank-pill--info">{{ expenses|length }} affichée(s)</span>
+    </div>
+    <form method="get" class="bank-form bank-form--inline">
+      <div class="bank-field">
+        <label for="status">Statut</label>
+        <select id="status" name="status">
+          <option value="">Tous les statuts</option>
+          {% for code, label in labels.items() %}<option value="{{ code }}" {{ 'selected' if status == code }}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="bank-actions">
+        <button class="bank-btn bank-btn--primary" type="submit">Filtrer</button>
+        <a href="{{ url_for('expenses.index') }}" class="bank-btn bank-btn--ghost">Effacer</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="bank-card bank-card--flush">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Registre des dépenses</h2>
+        <p class="bank-card-sub">Chaque dépense validée en espèces est déduite de la caisse ouverte, sans jamais rendre le solde négatif.</p>
+      </div>
+    </div>
+    <div class="bank-table-wrap">
+      <table class="bank-table">
+        <thead>
+          <tr>
+            <th>Référence</th>
+            <th>Date</th>
+            <th>Motif</th>
+            <th>Catégorie</th>
+            <th>Bénéficiaire</th>
+            <th class="num">Montant</th>
+            <th>Statut</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in expenses %}
+          <tr>
+            <td class="bank-ref">{{ e.reference }}</td>
+            <td class="bank-nowrap">{{ e.expense_date.strftime('%d/%m/%Y') }}</td>
+            <td>{{ e.motif }}</td>
+            <td>{{ e.category.name if e.category else '—' }}</td>
+            <td>{{ e.beneficiary or '—' }}</td>
+            <td class="num">
+              <span class="bank-amount bank-amount--out">{{ e.amount | num }} {{ e.currency }}
+                {% set xr = rate %}
+                {% if xr and xr.rate and e.currency == 'CDF' %}<small>≈ {{ (e.amount / xr.rate) | round(2) }} $</small>{% elif xr and xr.rate and e.currency == 'USD' %}<small>≈ {{ (e.amount * xr.rate) | round(2) }} FC</small>{% endif %}
+              </span>
+            </td>
+            <td>
+              {% if e.status == 'validee' %}<span class="bank-pill bank-pill--ok">Validée</span>
+              {% elif e.status == 'en_attente' %}<span class="bank-pill bank-pill--warn">En attente</span>
+              {% elif e.status == 'rejetee' %}<span class="bank-pill bank-pill--danger">Rejetée</span>
+              {% else %}<span class="bank-pill bank-pill--info">Saisie</span>{% endif %}
+            </td>
+            <td class="bank-right"><a class="bank-btn bank-btn--ghost bank-btn--sm" href="{{ url_for('expenses.detail', expense_id=e.id) }}">Ouvrir</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="bank-empty">Aucune dépense enregistrée.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:0 16px 14px">{{ show_pager(pager) }}</div>
+  </div>
+
+  {% if current_user.has_permission(P.EXPENSES_VALIDATE) %}
+  <div class="bank-card">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Catégories de dépense</h2>
+        <p class="bank-card-sub">Ajoutez une catégorie pour classer les sorties.</p>
+      </div>
+    </div>
+    <div class="bank-inline" style="margin-bottom:14px">
+      {% for c in categories %}<span class="bank-chip">{{ c.name }}</span>{% else %}<span class="bank-muted">Aucune catégorie.</span>{% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('expenses.add_category') }}" class="bank-form bank-form--inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bank-field">
+        <label for="name">Nouvelle catégorie</label>
+        <input type="text" id="name" name="name" placeholder="Ex. Loyer, transport, salaires…" required>
+      </div>
+      <div class="bank-actions">
+        <button class="bank-btn bank-btn--primary" type="submit">Ajouter</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
 </div>
-{% endif %}
 {% endblock %}

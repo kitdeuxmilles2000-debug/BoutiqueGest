@@ -2,6 +2,7 @@
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models.sales import (
@@ -10,17 +11,19 @@ from app.models.sales import (
     CASH_SESSION_STATUS_LABELS,
     CashMovement,
     CashMovementKind,
+    CashRegister,
     CashSession,
     CashSessionStatus,
     Sale,
 )
 from app.models.user import get_setting
 from app.security.audit import log_action
-from app.security.decorators import permission_required
+from app.security.decorators import admin_password_required, permission_required
 from app.security.permissions import P
 from app.services import cash as cash_service
 from app.services import settings as settings_service
 from app.services.pagination import paginate
+from app.services.stock import dec
 
 cash_bp = Blueprint("cash", __name__, url_prefix="/caisse")
 
@@ -38,27 +41,80 @@ def _load_session(session_id):
 
 @cash_bp.route("/")
 @login_required
-@permission_required(P.CASH_OPEN, mode="any")
+@permission_required(P.CASH_OPEN, P.CASH_VIEW_ALL, mode="any")
 def index():
-    from app.services.seed import seed_registers
-
-    seed_registers()
-    own = cash_service.find_open_session(vendeur_id=current_user.id)
+    # Ne semer les caisses par defaut qu'une seule fois : evite une ecriture
+    # (et un commit) a chaque affichage de la page Caisse.
     registers = cash_service.active_registers()
+    if not registers and CashRegister.query.count() == 0:
+        from app.services.seed import seed_registers
 
-    query = CashSession.query
+        seed_registers()
+        registers = cash_service.active_registers()
+
+    own = cash_service.find_open_session(vendeur_id=current_user.id)
+
+    query = CashSession.query.options(
+        joinedload(CashSession.register),
+        joinedload(CashSession.vendeur),
+    )
     if not _can_view_all():
         query = query.filter_by(vendeur_id=current_user.id)
     pager = paginate(query.order_by(CashSession.opened_at.desc()))
+
+    # Solde theorique des sessions affichees : une seule requete agregee
+    # au lieu de charger tous les mouvements session par session (N+1).
+    session_ids = [s.id for s in pager.items]
+    totals = {}
+    if session_ids:
+        totals = dict(
+            db.session.query(
+                CashMovement.session_id,
+                db.func.coalesce(db.func.sum(CashMovement.amount), 0),
+            )
+            .filter(CashMovement.session_id.in_(session_ids))
+            .group_by(CashMovement.session_id)
+            .all()
+        )
+    for session in pager.items:
+        session.display_theorique = dec(session.solde_initial) + dec(totals.get(session.id, 0))
+
+    own_summary = cash_service.summary_for(own) if own is not None else None
+
+    open_query = CashSession.query.filter_by(status=CashSessionStatus.OUVERTE)
+    if not _can_view_all():
+        open_query = open_query.filter_by(vendeur_id=current_user.id)
+    open_sessions = open_query.all()
+    open_ids = [s.id for s in open_sessions]
+    open_movements = {}
+    if open_ids:
+        open_movements = dict(
+            db.session.query(
+                CashMovement.session_id,
+                db.func.coalesce(db.func.sum(CashMovement.amount), 0),
+            )
+            .filter(CashMovement.session_id.in_(open_ids))
+            .group_by(CashMovement.session_id)
+            .all()
+        )
+    open_totals = {}
+    for s in open_sessions:
+        amount = dec(s.solde_initial) + dec(open_movements.get(s.id, 0))
+        s.display_theorique = amount
+        open_totals[s.currency] = open_totals.get(s.currency, dec(0)) + amount
+
     rate = settings_service.latest_rate()
 
     return render_template(
         "cash/index.html",
         own_session=own,
+        own_summary=own_summary,
         registers=registers,
         pager=pager,
         sessions=pager.items,
         labels=CASH_SESSION_STATUS_LABELS,
+        open_sessions=open_sessions,
+        open_totals=open_totals,
         rate=rate,
     )
 
@@ -111,14 +167,31 @@ def open_session():
 
 @cash_bp.route("/<int:session_id>")
 @login_required
-@permission_required(P.CASH_OPEN, mode="any")
+@permission_required(P.CASH_OPEN, P.CASH_VIEW_ALL, mode="any")
 def session_detail(session_id):
     session = _load_session(session_id)
-    theorique = session.compute_theorique()
+    theorique = cash_service.theorique_for(session)
+    summary = cash_service.summary_for(session)
     movements_pager = paginate(
         CashMovement.query.filter_by(session_id=session.id).order_by(CashMovement.created_at.desc()),
         key="mpage",
     )
+    movement_uuids = [m.uuid for m in movements_pager.items if m.uuid]
+    reversed_uuids = set()
+    if movement_uuids:
+        reversed_uuids = {
+            row[0]
+            for row in db.session.query(CashMovement.source_uuid)
+            .filter(
+                CashMovement.session_id == session.id,
+                CashMovement.source_type == "correction",
+                CashMovement.source_uuid.in_(movement_uuids),
+            )
+            .all()
+        }
+    for movement in movements_pager.items:
+        movement.is_manual = cash_service.is_manual_movement(movement)
+        movement.is_reversed = movement.uuid in reversed_uuids
     sales_pager = paginate(
         Sale.query.filter_by(cash_session_id=session.id).order_by(Sale.created_at.desc()),
         key="spage",
@@ -128,12 +201,15 @@ def session_detail(session_id):
         "cash/session.html",
         session=session,
         theorique=theorique,
+        summary=summary,
         movements=movements_pager.items,
         movements_pager=movements_pager,
         sales=sales_pager.items,
         sales_pager=sales_pager,
         labels=CASH_MOVEMENT_LABELS,
         statuses=CASH_SESSION_STATUS_LABELS,
+        can_correct=current_user.has_permission(P.CASH_OPEN)
+        or current_user.has_permission(P.CASH_VIEW_ALL),
         rate=rate,
     )
 
@@ -162,9 +238,14 @@ def add_movement(session_id):
         return redirect(url_for("cash.session_detail", session_id=session.id))
 
     signed = amount if kind in CASH_IN_KINDS else -amount
-    cash_service.record_cash(
-        session, kind, signed, reason=reason or None, user_id=current_user.id
-    )
+    try:
+        cash_service.record_cash(
+            session, kind, signed, reason=reason or None, user_id=current_user.id
+        )
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for("cash.session_detail", session_id=session.id))
     log_action(
         "cash_movement",
         entity="cash_session",
@@ -174,6 +255,133 @@ def add_movement(session_id):
         commit=True,
     )
     flash("Mouvement de caisse enregistre.", "success")
+    return redirect(url_for("cash.session_detail", session_id=session.id))
+
+
+@cash_bp.route("/<int:session_id>/mouvement/<int:movement_id>/corriger", methods=["POST"])
+@login_required
+@permission_required(P.CASH_OPEN, P.CASH_VIEW_ALL, mode="any")
+@admin_password_required()
+def movement_correct(session_id, movement_id):
+    session = _load_session(session_id)
+    movement = db.session.get(CashMovement, movement_id) or abort(404)
+    if movement.session_id != session.id:
+        abort(404)
+
+    reason = (request.form.get("reason") or "").strip()
+    before = {
+        "kind": movement.kind,
+        "amount": str(movement.amount),
+        "reason": movement.reason,
+        "source_type": movement.source_type,
+    }
+    try:
+        if cash_service.is_manual_movement(movement):
+            cash_service.correct_manual_movement(
+                movement,
+                amount=request.form.get("amount"),
+                kind=request.form.get("kind") or movement.kind,
+                reason=reason,
+                user_id=current_user.id,
+            )
+            action = "cash_movement_correct"
+            message = "Mouvement de caisse corrige."
+        else:
+            cash_service.reverse_movement(
+                movement,
+                reason=reason,
+                user_id=current_user.id,
+            )
+            action = "cash_movement_reverse"
+            message = (
+                "Contre-passation enregistree : le mouvement d'origine reste "
+                "trace et le solde de caisse est reequilibre."
+            )
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for("cash.session_detail", session_id=session.id))
+
+    log_action(
+        action,
+        entity="cash_session",
+        entity_uuid=session.uuid,
+        before=before,
+        after={"solde": str(cash_service.theorique_for(session))},
+        reason=reason,
+        commit=True,
+    )
+    flash(message, "success")
+    return redirect(url_for("cash.session_detail", session_id=session.id))
+
+
+@cash_bp.route("/<int:session_id>/mouvement/<int:movement_id>/supprimer", methods=["POST"])
+@login_required
+@permission_required(P.CASH_OPEN, P.CASH_VIEW_ALL, mode="any")
+@admin_password_required()
+def movement_delete(session_id, movement_id):
+    session = _load_session(session_id)
+    movement = db.session.get(CashMovement, movement_id) or abort(404)
+    if movement.session_id != session.id:
+        abort(404)
+
+    reason = (request.form.get("reason") or "").strip()
+    before = {
+        "kind": movement.kind,
+        "amount": str(movement.amount),
+        "reason": movement.reason,
+        "source_type": movement.source_type,
+    }
+    try:
+        if cash_service.is_manual_movement(movement):
+            cash_service.delete_manual_movement(
+                movement, user_id=current_user.id
+            )
+            action = "cash_movement_delete"
+            message = "Mouvement de caisse supprime et solde recalcule."
+        else:
+            cash_service.reverse_movement(
+                movement,
+                reason=reason,
+                user_id=current_user.id,
+            )
+            action = "cash_movement_reverse"
+            message = (
+                "Mouvement lie : une contre-passation a ete enregistree pour "
+                "reequilibrer la caisse."
+            )
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for("cash.session_detail", session_id=session.id))
+
+    log_action(
+        action,
+        entity="cash_session",
+        entity_uuid=session.uuid,
+        before=before,
+        after={"solde": str(cash_service.theorique_for(session))},
+        reason=reason,
+        commit=True,
+    )
+    flash(message, "success")
+    return redirect(url_for("cash.session_detail", session_id=session.id))
+
+
+@cash_bp.route("/<int:session_id>/recalculer", methods=["POST"])
+@login_required
+@permission_required(P.CASH_OPEN, P.CASH_VIEW_ALL, mode="any")
+def recalculate(session_id):
+    session = _load_session(session_id)
+    theorique = cash_service.recalculate_session(session)
+    log_action(
+        "cash_recalculate",
+        entity="cash_session",
+        entity_uuid=session.uuid,
+        after={"theorique": str(theorique)},
+        commit=True,
+    )
+    flash("Solde de caisse recalcule.", "success")
     return redirect(url_for("cash.session_detail", session_id=session.id))
 
 
@@ -192,7 +400,7 @@ def close_session(session_id):
         flash(str(exc), "danger")
         return redirect(url_for("cash.session_detail", session_id=session.id))
     motif = (request.form.get("motif_ecart") or "").strip()
-    theorique = session.compute_theorique()
+    theorique = cash_service.theorique_for(session)
     ecart = solde_compte - theorique
     if ecart != 0 and not motif:
         flash("Un ecart de caisse doit etre explique (motif obligatoire).", "danger")

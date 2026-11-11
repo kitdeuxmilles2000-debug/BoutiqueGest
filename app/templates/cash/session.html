@@ -4,163 +4,324 @@
 {% block heading %}Caisse · {{ session.register.name }} ({{ session.currency }}){% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="row between">
-    <div>
-      <h2>{{ session.register.name }}
-        {% if session.status == 'validee' %}<span class="badge green">Validee</span>
-        {% elif session.status == 'soumise' %}<span class="badge amber">Soumise</span>
-        {% else %}<span class="badge gray">Ouverte</span>{% endif %}
-      </h2>
-      <p class="sub">Vendeur : {{ session.vendeur.full_name }} · ouverte le {{ session.opened_at.strftime('%d/%m/%Y %H:%M') }}
-        {% if session.closed_at %} · cloturee le {{ session.closed_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
-        {% if session.validated_by %} · validee par {{ session.validated_by.full_name }}{% endif %}</p>
+<div class="bank-page bank-stack">
+
+  <section class="bank-hero">
+    <div class="bank-hero-main">
+      <div class="bank-eyebrow">Caisse · {{ session.register.name }}</div>
+      <div class="bank-balance-label">Solde disponible</div>
+      <div class="bank-balance-value {{ 'is-negative' if theorique < 0 }}">
+        {{ theorique | num }} <span class="bank-balance-currency">{{ session.currency }}</span>
+      </div>
+      <div class="bank-balance-sub">
+        {% if rate and rate.rate and session.currency == 'CDF' %}
+          ≈ {{ (theorique / rate.rate) | round(2) }} $ · taux 1 USD = {{ rate.rate }} CDF
+        {% elif rate and rate.rate and session.currency == 'USD' %}
+          ≈ {{ (theorique * rate.rate) | round(2) }} FC · taux 1 USD = {{ rate.rate }} CDF
+        {% else %}
+          Fond initial + entrées − sorties
+        {% endif %}
+      </div>
+      <div class="bank-hero-meta">
+        <span>Vendeur <strong>{{ session.vendeur.full_name if session.vendeur else '—' }}</strong></span>
+        <span>Ouverte le <strong>{{ session.opened_at.strftime('%d/%m/%Y %H:%M') }}</strong></span>
+        {% if session.closed_at %}<span>Clôturée le <strong>{{ session.closed_at.strftime('%d/%m/%Y %H:%M') }}</strong></span>{% endif %}
+        {% if session.validated_by %}<span>Validée par <strong>{{ session.validated_by.full_name }}</strong></span>{% endif %}
+      </div>
     </div>
-    <div class="row">
-      {% if current_user.has_permission(P.SALES_CREATE) and session.is_open %}
-      <a href="{{ url_for('pos.index') }}" class="btn">Vendre</a>
+    <div class="bank-hero-side">
+      {% if session.status == 'validee' %}
+        <span class="bank-pill bank-pill--hero">Clôture validée</span>
+      {% elif session.status == 'soumise' %}
+        <span class="bank-pill bank-pill--hero">En attente de validation</span>
+      {% else %}
+        <span class="bank-pill bank-pill--hero">Caisse ouverte</span>
       {% endif %}
-      {% if session.status == 'soumise' and current_user.has_permission(P.CASH_VALIDATE) %}
-      <form method="post" action="{{ url_for('cash.validate_session', session_id=session.id) }}" onsubmit="return confirm('Valider cette cloture ?')">
+      <div class="bank-actions" style="justify-content:flex-end">
+        {% if current_user.has_permission(P.SALES_CREATE) and session.is_open %}
+        <a href="{{ url_for('pos.index') }}" class="bank-btn bank-btn--hero">Vendre</a>
+        {% endif %}
+        <a href="{{ url_for('cash.index') }}" class="bank-btn bank-btn--hero">Retour</a>
+      </div>
+    </div>
+  </section>
+
+  {% if theorique < 0 %}
+  <div class="bank-alert bank-alert--danger">
+    <strong>Solde négatif.</strong> Cette session contient une sortie supérieure au solde disponible.
+    Utilisez « Corriger » sur le mouvement concerné pour rééquilibrer la caisse avec le mot de passe administrateur.
+  </div>
+  {% endif %}
+
+  <div class="bank-grid bank-grid--4">
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Fond initial</span>
+        <span class="bank-stat-value">{{ summary.solde_initial | num }} <small style="font-size:.6em;font-weight:600">{{ session.currency }}</small></span>
+        <span class="bank-stat-foot">À l'ouverture de la session</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Entrées</span>
+        <span class="bank-stat-value bank-stat-value--in">+{{ summary.entrees | num }} <small style="font-size:.6em;font-weight:600">{{ session.currency }}</small></span>
+        <span class="bank-stat-foot">Ventes, apports, recouvrements</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Sorties</span>
+        <span class="bank-stat-value bank-stat-value--out">−{{ summary.sorties | num }} <small style="font-size:.6em;font-weight:600">{{ session.currency }}</small></span>
+        <span class="bank-stat-foot">Dépenses, retraits, règlements</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">{{ 'Écart de clôture' if session.solde_compte is not none else 'Solde théorique' }}</span>
+        {% if session.solde_compte is not none %}
+        <span class="bank-stat-value {{ 'bank-stat-value--out' if session.ecart != 0 else 'bank-stat-value--in' }}">{{ session.ecart | num }} <small style="font-size:.6em;font-weight:600">{{ session.currency }}</small></span>
+        <span class="bank-stat-foot">Compté : {{ session.solde_compte | num }} {{ session.currency }}{% if session.motif_ecart %} · {{ session.motif_ecart }}{% endif %}</span>
+        {% else %}
+        <span class="bank-stat-value">{{ summary.solde | num }} <small style="font-size:.6em;font-weight:600">{{ session.currency }}</small></span>
+        <span class="bank-stat-foot">{{ summary.operations }} mouvement(s)</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% set total_flow = summary.entrees + summary.sorties %}
+  <div class="bank-card">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Flux de la session</h2>
+        <p class="bank-card-sub">Visualisation des encaissements et décaissements.</p>
+      </div>
+      <div class="bank-actions">
+        <span class="bank-pill bank-pill--info">{{ session.currency }}</span>
+        <form method="post" action="{{ url_for('cash.recalculate', session_id=session.id) }}" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="bank-btn bank-btn--ghost bank-btn--sm" type="submit" title="Recalculer le solde à partir des mouvements">Recalculer le solde</button>
+        </form>
+      </div>
+    </div>
+    <div class="bank-flow">
+      <div class="bank-flow-in" style="width: {{ (summary.entrees / total_flow * 100) | round(1) if total_flow else 0 }}%"></div>
+      <div class="bank-flow-out" style="width: {{ (summary.sorties / total_flow * 100) | round(1) if total_flow else 0 }}%"></div>
+    </div>
+    <div class="bank-inline" style="justify-content:space-between;margin-top:10px">
+      <span class="bank-help"><span class="bank-pill bank-pill--ok">Entrées</span> {{ summary.entrees | num }} {{ session.currency }}</span>
+      <span class="bank-help"><span class="bank-pill bank-pill--danger">Sorties</span> {{ summary.sorties | num }} {{ session.currency }}</span>
+    </div>
+  </div>
+
+  {% if session.is_open and current_user.has_permission(P.CASH_OPEN) %}
+  <div class="bank-split">
+    <div class="bank-card bank-card--accent">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Mouvement de caisse</h2>
+          <p class="bank-card-sub">Apport (ajout) ou retrait (prélèvement) avec motif. Le solde ne peut jamais devenir négatif.</p>
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('cash.add_movement', session_id=session.id) }}" class="bank-form bank-form--2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn">Valider la cloture</button>
+        <div class="bank-field">
+          <label for="kind">Type</label>
+          <select id="kind" name="kind">
+            <option value="apport">Apport</option>
+            <option value="retrait">Retrait</option>
+          </select>
+        </div>
+        <div class="bank-field">
+          <label for="amount">Montant ({{ session.currency }})</label>
+          <input type="text" id="amount" name="amount" inputmode="decimal" class="bank-input-lg" required>
+        </div>
+        <div class="bank-field" style="grid-column:1 / -1">
+          <label for="reason">Motif</label>
+          <input type="text" id="reason" name="reason" placeholder="Ex. apport du propriétaire, retrait pour dépense…">
+        </div>
+        <div class="bank-actions" style="grid-column:1 / -1">
+          <button class="bank-btn bank-btn--primary" type="submit">Enregistrer le mouvement</button>
+          <span class="bank-help">Disponible : <strong>{{ theorique | num }} {{ session.currency }}</strong></span>
+        </div>
       </form>
-      {% endif %}
-      <a href="{{ url_for('cash.index') }}" class="btn ghost">Retour</a>
     </div>
-  </div>
 
-  <div class="grid cols-4">
-    <div class="kpi">
-      <span class="label">Fond initial</span>
-      <span class="value">{{ session.solde_initial | num }} {{ session.currency }}</span>
-      <span class="foot">
-        {% if rate and rate.rate and session.currency == 'CDF' %}≈ {{ (session.solde_initial / rate.rate) | round(2) }} ${% elif rate and rate.rate and session.currency == 'USD' %}≈ {{ (session.solde_initial * rate.rate) | round(2) }} FC{% else %}{{ session.currency }}{% endif %}
-      </span>
+    {% if current_user.has_permission(P.CASH_CLOSE) %}
+    <div class="bank-card">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Clôturer la caisse</h2>
+          <p class="bank-card-sub">Comptez le tiroir et saisissez le montant réel.</p>
+        </div>
+        <span class="bank-pill bank-pill--warn">Clôture</span>
+      </div>
+      <form method="post" action="{{ url_for('cash.close_session', session_id=session.id) }}" class="bank-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="bank-field">
+          <label for="solde_compte">Montant compté ({{ session.currency }})</label>
+          <input type="text" id="solde_compte" name="solde_compte" inputmode="decimal" class="bank-input-lg" required>
+        </div>
+        <div class="bank-field">
+          <label for="motif_ecart">Motif si écart</label>
+          <input type="text" id="motif_ecart" name="motif_ecart" placeholder="Obligatoire si le montant diffère du théorique">
+        </div>
+        <button class="bank-btn bank-btn--navy" type="submit">Soumettre la clôture</button>
+      </form>
     </div>
-    <div class="kpi">
-      <span class="label">Théorique</span>
-      <span class="value">{{ theorique | num }} {{ session.currency }}</span>
-      <span class="foot">
-        {% if rate and rate.rate and session.currency == 'CDF' %}≈ {{ (theorique / rate.rate) | round(2) }} ${% elif rate and rate.rate and session.currency == 'USD' %}≈ {{ (theorique * rate.rate) | round(2) }} FC{% else %}initial + entrées − sorties{% endif %}
-      </span>
-    </div>
-    <div class="kpi">
-      <span class="label">Compté</span>
-      <span class="value">{{ session.solde_compte | num if session.solde_compte is not none else '—' }} {% if session.solde_compte is not none %}{{ session.currency }}{% endif %}</span>
-      <span class="foot">
-        {% if session.solde_compte is not none and rate and rate.rate and session.currency == 'CDF' %}≈ {{ (session.solde_compte / rate.rate) | round(2) }} ${% elif session.solde_compte is not none and rate and rate.rate and session.currency == 'USD' %}≈ {{ (session.solde_compte * rate.rate) | round(2) }} FC{% else %}{{ session.currency }}{% endif %}
-      </span>
-    </div>
-    <div class="kpi">
-      <span class="label">Écart</span>
-      <span class="value {{ 'bad' if session.ecart != 0 else 'good' }}">{{ session.ecart | num }} {{ session.currency }}</span>
-      <span class="foot">
-        {% if rate and rate.rate and session.currency == 'CDF' %}≈ {{ (session.ecart / rate.rate) | round(2) }} $ · {% elif rate and rate.rate and session.currency == 'USD' %}≈ {{ (session.ecart * rate.rate) | round(2) }} FC · {% endif %}{{ session.motif_ecart or '—' }}
-      </span>
-    </div>
+    {% endif %}
   </div>
-  {% if rate %}
-  <p class="sub" style="margin-top:8px">Affichage en dollars ($) et en francs congolais (FC) — taux 1 USD = {{ rate.rate }} CDF ({{ rate.effective_date.strftime('%d/%m/%Y') }}). <a href="{{ url_for('admin.settings') }}">Paramètres</a></p>
-  {% elif current_user.has_permission(P.SETTINGS_MANAGE) %}
-  <p class="sub" style="margin-top:8px"><a href="{{ url_for('admin.settings') }}">Paramètres</a> : configurez le taux pour afficher les montants en USD ($) et en FC.</p>
-  {% endif %}
-</div>
-
-{% if session.is_open and current_user.has_permission(P.CASH_OPEN) %}
-<div class="grid cols-3">
-  <div class="card">
-    <h2>Mouvement de caisse</h2>
-    <p class="sub">Apport (ajout) ou retrait (prelevement) avec motif.</p>
-    <form method="post" action="{{ url_for('cash.add_movement', session_id=session.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label for="kind">Type</label>
-        <select id="kind" name="kind">
-          <option value="apport">Apport</option>
-          <option value="retrait">Retrait</option>
-        </select>
+  {% elif session.status == 'soumise' and current_user.has_permission(P.CASH_VALIDATE) %}
+  <div class="bank-card">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Validation de la clôture</h2>
+        <p class="bank-card-sub">La clôture a été soumise. Validez-la pour clore définitivement la session.</p>
       </div>
-      <div class="field">
-        <label for="amount">Montant</label>
-        <input type="text" id="amount" name="amount" required>
-      </div>
-      <div class="field">
-        <label for="reason">Motif</label>
-        <input type="text" id="reason" name="reason">
-      </div>
-      <button class="btn" type="submit">Enregistrer</button>
-    </form>
-  </div>
-
-  {% if current_user.has_permission(P.CASH_CLOSE) %}
-  <div class="card">
-    <h2>Cloturer la caisse</h2>
-    <p class="sub">Comptez le tiroir et saisissez le montant reel.</p>
-    <form method="post" action="{{ url_for('cash.close_session', session_id=session.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field">
-        <label for="solde_compte">Montant compte ({{ session.currency }})</label>
-        <input type="text" id="solde_compte" name="solde_compte" required>
-      </div>
-      <div class="field">
-        <label for="motif_ecart">Motif si ecart</label>
-        <input type="text" id="motif_ecart" name="motif_ecart">
-      </div>
-      <button class="btn" type="submit">Soumettre la cloture</button>
-    </form>
+      <form method="post" action="{{ url_for('cash.validate_session', session_id=session.id) }}" onsubmit="return confirm('Valider cette clôture ?')" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="bank-btn bank-btn--primary" type="submit">Valider la clôture</button>
+      </form>
+    </div>
   </div>
   {% endif %}
-</div>
-{% endif %}
 
-<div class="card">
-  <h2>Mouvements</h2>
-  <div class="table-wrap">
-    <table class="table">
-      <thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Motif</th><th>Par</th></tr></thead>
-      <tbody>
-        {% for m in movements %}
-        <tr>
-          <td>{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
-          <td>{{ labels.get(m.kind, m.kind) }}</td>
-          <td style="font-weight:700;color:{{ 'var(--success)' if m.amount >= 0 else 'var(--danger)' }}">
-            {{ '+' if m.amount >= 0 }}{{ m.amount | num }} {{ m.currency or session.currency }}
-            {% set mcur = m.currency or session.currency %}
-            {% if rate and rate.rate and mcur == 'CDF' %}<br><span class="muted" style="font-weight:400">≈ {{ (m.amount / rate.rate) | round(2) }} $</span>{% elif rate and rate.rate and mcur == 'USD' %}<br><span class="muted" style="font-weight:400">≈ {{ (m.amount * rate.rate) | round(2) }} FC</span>{% endif %}
-          </td>
-          <td>{{ m.reason or '—' }}</td>
-          <td>{{ m.user.username if m.user else '—' }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" class="muted">Aucun mouvement.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {{ show_pager(movements_pager) }}
+  <div class="bank-card bank-card--flush">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Mouvements</h2>
+        <p class="bank-card-sub">Chaque opération est tracée. La correction d'un mouvement lié crée une contre-passation, jamais une suppression silencieuse.</p>
+      </div>
+      <span class="bank-pill">{{ summary.operations }}</span>
+    </div>
+    <div class="bank-table-wrap">
+      <table class="bank-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th class="num">Montant</th>
+            <th>Motif</th>
+            <th>Par</th>
+            <th>Origine</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in movements %}
+          <tr>
+            <td class="bank-nowrap">{{ m.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td>
+              <span class="bank-ref">{{ labels.get(m.kind, m.kind) }}</span>
+              {% if m.is_reversed %}<span class="bank-pill bank-pill--warn" style="margin-left:6px">Contre-passée</span>{% endif %}
+            </td>
+            <td class="num">
+              <span class="bank-amount {{ 'bank-amount--in' if m.amount >= 0 else 'bank-amount--out' }}">
+                {{ '+' if m.amount >= 0 }}{{ m.amount | num }} {{ m.currency or session.currency }}
+                {% set mcur = m.currency or session.currency %}
+                {% if rate and rate.rate and mcur == 'CDF' %}<small>≈ {{ (m.amount / rate.rate) | round(2) }} $</small>{% elif rate and rate.rate and mcur == 'USD' %}<small>≈ {{ (m.amount * rate.rate) | round(2) }} FC</small>{% endif %}
+              </span>
+            </td>
+            <td>{{ m.reason or '—' }}</td>
+            <td>{{ m.user.username if m.user else '—' }}</td>
+            <td>
+              {% if m.source_type %}
+                {% set src_labels = {'sale': 'Vente', 'sale_cancel': 'Annulation vente', 'expense': 'Dépense', 'settlement': 'Règlement', 'correction': 'Correction'} %}
+                <span class="bank-chip">{{ src_labels.get(m.source_type, m.source_type) }}</span>
+              {% else %}
+                <span class="bank-chip">Manuel</span>
+              {% endif %}
+            </td>
+            <td class="bank-right">
+              {% if can_correct and not m.is_reversed %}
+              <details class="bank-details">
+                <summary>Corriger</summary>
+                <div class="bank-correction" style="text-align:left;min-width:280px">
+                  <form method="post" action="{{ url_for('cash.movement_correct', session_id=session.id, movement_id=m.id) }}" class="bank-form bank-form--2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% if m.is_manual %}
+                    <div class="bank-field">
+                      <label>Type</label>
+                      <select name="kind">
+                        <option value="apport" {{ 'selected' if m.kind == 'apport' }}>Apport</option>
+                        <option value="retrait" {{ 'selected' if m.kind == 'retrait' }}>Retrait</option>
+                      </select>
+                    </div>
+                    <div class="bank-field">
+                      <label>Montant ({{ session.currency }})</label>
+                      <input type="text" name="amount" value="{{ m.amount | abs }}" inputmode="decimal" required>
+                    </div>
+                    {% else %}
+                    <div class="bank-alert bank-alert--info" style="grid-column:1 / -1">
+                      Mouvement lié à une opération métier. La correction crée une écriture inverse et conserve l'historique.
+                    </div>
+                    {% endif %}
+                    <div class="bank-field" style="grid-column:1 / -1">
+                      <label>Motif de la correction</label>
+                      <input type="text" name="reason" placeholder="Expliquez la correction (audit)">
+                    </div>
+                    <div class="bank-field" style="grid-column:1 / -1">
+                      <label>Mot de passe administrateur / propriétaire</label>
+                      <input type="password" name="owner_password" autocomplete="current-password" required>
+                    </div>
+                    <div class="bank-actions" style="grid-column:1 / -1">
+                      <button class="bank-btn bank-btn--primary bank-btn--sm" type="submit">
+                        {{ 'Enregistrer la correction' if m.is_manual else 'Contre-passer' }}
+                      </button>
+                      {% if m.is_manual %}
+                      <button class="bank-btn bank-btn--danger bank-btn--sm" type="submit"
+                        formaction="{{ url_for('cash.movement_delete', session_id=session.id, movement_id=m.id) }}"
+                        onclick="return confirm('Supprimer ce mouvement ? Le solde de la caisse sera recalculé.')">Supprimer</button>
+                      {% endif %}
+                    </div>
+                  </form>
+                </div>
+              </details>
+              {% elif m.is_reversed %}
+              <span class="bank-pill bank-pill--warn">Rééquilibrée</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="bank-empty">Aucun mouvement pour cette session.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:0 16px 14px">{{ show_pager(movements_pager) }}</div>
   </div>
-</div>
 
-<div class="card">
-  <h2>Ventes de la session</h2>
-  <div class="table-wrap">
-    <table class="table">
-      <thead><tr><th>Numero</th><th>Heure</th><th>Total</th><th>Statut</th><th></th></tr></thead>
-      <tbody>
-        {% for s in sales %}
-        <tr>
-          <td>{{ s.numero }}</td>
-          <td>{{ s.created_at.strftime('%H:%M') }}</td>
-          <td>{{ s.montant_total | num }} {{ s.currency }}</td>
-          <td>{{ s.status }}</td>
-          <td><a class="btn ghost sm" href="{{ url_for('sales.detail', sale_id=s.id) }}">Recu</a></td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" class="muted">Aucune vente.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {{ show_pager(sales_pager) }}
+  <div class="bank-card bank-card--flush">
+    <div class="bank-card-head">
+      <div>
+        <h2 class="bank-card-title">Ventes de la session</h2>
+        <p class="bank-card-sub">Encaissements rattachés à cette caisse.</p>
+      </div>
+    </div>
+    <div class="bank-table-wrap">
+      <table class="bank-table">
+        <thead><tr><th>Numéro</th><th>Heure</th><th class="num">Total</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          {% for s in sales %}
+          <tr>
+            <td class="bank-ref">{{ s.numero }}</td>
+            <td>{{ s.created_at.strftime('%H:%M') }}</td>
+            <td class="num bank-amount">{{ s.montant_total | num }} {{ s.currency }}</td>
+            <td>
+              {% if s.status == 'validee' %}<span class="bank-pill bank-pill--ok">Validée</span>
+              {% elif s.status == 'remboursee' %}<span class="bank-pill bank-pill--warn">Remboursée</span>
+              {% elif s.status == 'annulee' %}<span class="bank-pill bank-pill--danger">Annulée</span>
+              {% else %}<span class="bank-pill">{{ s.status }}</span>{% endif %}
+            </td>
+            <td class="bank-right"><a class="bank-btn bank-btn--ghost bank-btn--sm" href="{{ url_for('sales.detail', sale_id=s.id) }}">Reçu</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="bank-empty">Aucune vente.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:0 16px 14px">{{ show_pager(sales_pager) }}</div>
   </div>
 </div>
 {% endblock %}

@@ -1,66 +1,166 @@
 {% extends "base.html" %}
 {% block title %}Dépense {{ expense.reference }}{% endblock %}
-{% block heading %}Depense · {{ expense.reference }}{% endblock %}
+{% block heading %}Dépense · {{ expense.reference }}{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="row between">
-    <div>
-      <h2>{{ expense.reference }}
-        {% if expense.status == 'validee' %}<span class="badge green">Validee</span>
-        {% elif expense.status == 'en_attente' %}<span class="badge amber">En attente</span>
-        {% elif expense.status == 'rejetee' %}<span class="badge red">Rejetee</span>
-        {% else %}<span class="badge gray">Saisie</span>{% endif %}
-      </h2>
-      <p class="sub">{{ expense.motif }} · {{ expense.amount | num }} {{ expense.currency }}{% set xr = exchange_rate or rate %}{% if xr and expense.currency == 'CDF' %} (≈ {{ (expense.amount / xr.rate) | round(2) }} $){% elif xr and expense.currency == 'USD' %} (≈ {{ (expense.amount * xr.rate) | round(2) }} FC){% endif %} ·
-        {{ expense.category.name if expense.category else 'Sans categorie' }}</p>
-    </div>
-    <a href="{{ url_for('expenses.index') }}" class="btn ghost">Retour</a>
-  </div>
+<div class="bank-page bank-stack">
 
-  <div class="grid cols-4">
-    <div class="kpi">
-      <span class="label">Montant</span>
-      <span class="value" style="font-size:1.1rem">{{ expense.amount | num }} {{ expense.currency }}</span>
-      <span class="foot">{% set xr = exchange_rate or rate %}{% if xr and expense.currency == 'CDF' %}≈ {{ (expense.amount / xr.rate) | round(2) }} ${% elif xr and expense.currency == 'USD' %}≈ {{ (expense.amount * xr.rate) | round(2) }} FC{% else %}{{ expense.currency }}{% endif %}</span>
+  <section class="bank-hero">
+    <div class="bank-hero-main">
+      <div class="bank-eyebrow">Dépenses · Dossier {{ expense.reference }}</div>
+      <div class="bank-balance-label">Montant de la dépense</div>
+      <div class="bank-balance-value bank-balance-value--out" style="color:#ffd0c8">
+        {{ expense.amount | num }} <span class="bank-balance-currency">{{ expense.currency }}</span>
+      </div>
+      <div class="bank-balance-sub">
+        {% if rate and rate.rate and expense.currency == 'CDF' %}≈ {{ (expense.amount / rate.rate) | round(2) }} $ · {% elif rate and rate.rate and expense.currency == 'USD' %}≈ {{ (expense.amount * rate.rate) | round(2) }} FC · {% endif %}
+        {{ expense.motif }} · {{ expense.category.name if expense.category else 'Sans catégorie' }}
+      </div>
+      <div class="bank-hero-meta">
+        <span>Date <strong>{{ expense.expense_date.strftime('%d/%m/%Y') }}</strong></span>
+        <span>Bénéficiaire <strong>{{ expense.beneficiary or '—' }}</strong></span>
+        <span>Créée par <strong>{{ expense.created_by.full_name if expense.created_by else '—' }}</strong></span>
+      </div>
     </div>
-    <div class="kpi"><span class="label">Date</span><span class="value" style="font-size:1.1rem">{{ expense.expense_date.strftime('%d/%m/%Y') }}</span></div>
-    <div class="kpi"><span class="label">Bénéficiaire</span><span class="value" style="font-size:1.1rem">{{ expense.beneficiary or '—' }}</span></div>
-    <div class="kpi"><span class="label">Moyen / Créé par</span><span class="value" style="font-size:.95rem">{{ methods.get(expense.method, expense.method) }}</span><span class="foot">{{ expense.created_by.full_name if expense.created_by else '—' }}</span></div>
-  </div>
-  {% if expense.reject_reason %}<p class="sub mt-16"><strong>Motif de rejet :</strong> {{ expense.reject_reason }}</p>{% endif %}
-  {% if expense.validated_by %}<p class="sub">Validee par {{ expense.validated_by.full_name }} le {{ expense.validated_at.strftime('%d/%m/%Y %H:%M') }}</p>{% endif %}
-</div>
+    <div class="bank-hero-side">
+      {% if expense.status == 'validee' %}
+        <span class="bank-pill bank-pill--hero">Validée</span>
+      {% elif expense.status == 'en_attente' %}
+        <span class="bank-pill bank-pill--hero">En attente</span>
+      {% elif expense.status == 'rejetee' %}
+        <span class="bank-pill bank-pill--hero">Rejetée</span>
+      {% else %}
+        <span class="bank-pill bank-pill--hero">Saisie</span>
+      {% endif %}
+      <a href="{{ url_for('expenses.index') }}" class="bank-btn bank-btn--hero">Retour au registre</a>
+    </div>
+  </section>
 
-<div class="grid cols-3">
-  {% if current_user.has_permission(P.EXPENSES_CREATE) and expense.status in ('saisie', 'rejetee') %}
-  <div class="card">
-    <h2>Soumettre</h2>
-    <p class="sub">Envoyer la depense pour validation.</p>
-    <form method="post" action="{{ url_for('expenses.submit', expense_id=expense.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn" type="submit">Soumettre pour validation</button>
-    </form>
+  {% if expense.reject_reason %}
+  <div class="bank-alert bank-alert--danger">
+    <strong>Motif de rejet :</strong> {{ expense.reject_reason }}
+  </div>
+  {% endif %}
+  {% if expense.validated_by %}
+  <div class="bank-alert bank-alert--info">
+    Validée par <strong>{{ expense.validated_by.full_name }}</strong> le {{ expense.validated_at.strftime('%d/%m/%Y à %H:%M') }}.
+    {% if expense.cash_session %}
+      Caisse : <strong>{{ expense.cash_session.register.name if expense.cash_session.register else '—' }}</strong>
+      (<a href="{{ url_for('cash.session_detail', session_id=expense.cash_session.id) }}">voir la session</a>).
+    {% else %}
+      Aucune caisse rattachée : aucune déduction de caisse.
+    {% endif %}
   </div>
   {% endif %}
 
-  {% if current_user.has_permission(P.EXPENSES_VALIDATE) and expense.status != 'validee' %}
-  <div class="card">
-    <h2>Valider</h2>
-    <p class="sub">Deduit la caisse si un tiroir espece est ouvert.</p>
-    <form method="post" action="{{ url_for('expenses.validate', expense_id=expense.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn" type="submit">Valider la depense</button>
-    </form>
+  <div class="bank-grid bank-grid--4">
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Montant</span>
+        <span class="bank-stat-value bank-stat-value--out">{{ expense.amount | num }} {{ expense.currency }}</span>
+        <span class="bank-stat-foot">{% if rate and rate.rate and expense.currency == 'CDF' %}≈ {{ (expense.amount / rate.rate) | round(2) }} ${% elif rate and rate.rate and expense.currency == 'USD' %}≈ {{ (expense.amount * rate.rate) | round(2) }} FC{% else %}{{ expense.currency }}{% endif %}</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Date</span>
+        <span class="bank-stat-value bank-stat-value--muted">{{ expense.expense_date.strftime('%d/%m/%Y') }}</span>
+        <span class="bank-stat-foot">Date d'enregistrement</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Bénéficiaire</span>
+        <span class="bank-stat-value bank-stat-value--muted">{{ expense.beneficiary or '—' }}</span>
+        <span class="bank-stat-foot">Personne ou structure payée</span>
+      </div>
+    </div>
+    <div class="bank-card">
+      <div class="bank-stat">
+        <span class="bank-stat-label">Moyen de paiement</span>
+        <span class="bank-stat-value bank-stat-value--muted">{{ methods.get(expense.method, expense.method) }}</span>
+        <span class="bank-stat-foot">Créée par {{ expense.created_by.full_name if expense.created_by else '—' }}</span>
+      </div>
+    </div>
   </div>
-  <div class="card">
-    <h2>Rejeter</h2>
-    <form method="post" action="{{ url_for('expenses.reject', expense_id=expense.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field"><label for="reason">Motif du rejet</label><input type="text" id="reason" name="reason" required></div>
-      <button class="btn danger" type="submit">Rejeter</button>
-    </form>
+
+  <div class="bank-split">
+    <div class="bank-card">
+      <div class="bank-card-head">
+        <div>
+          <h2 class="bank-card-title">Détails</h2>
+          <p class="bank-card-sub">Informations complémentaires du dossier.</p>
+        </div>
+      </div>
+      <div class="bank-grid bank-grid--2">
+        <div class="bank-stat">
+          <span class="bank-stat-label">Référence</span>
+          <span class="bank-stat-value bank-stat-value--muted">{{ expense.reference }}</span>
+        </div>
+        <div class="bank-stat">
+          <span class="bank-stat-label">Catégorie</span>
+          <span class="bank-stat-value bank-stat-value--muted">{{ expense.category.name if expense.category else 'Sans catégorie' }}</span>
+        </div>
+        <div class="bank-stat" style="grid-column:1 / -1">
+          <span class="bank-stat-label">Motif</span>
+          <span class="bank-stat-value bank-stat-value--muted" style="font-size:1rem">{{ expense.motif }}</span>
+        </div>
+        {% if expense.notes %}
+        <div class="bank-stat" style="grid-column:1 / -1">
+          <span class="bank-stat-label">Notes</span>
+          <span class="bank-stat-foot">{{ expense.notes }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="bank-stack">
+      {% if current_user.has_permission(P.EXPENSES_CREATE) and expense.status in ('saisie', 'rejetee') %}
+      <div class="bank-card bank-card--accent">
+        <div class="bank-card-head">
+          <div>
+            <h2 class="bank-card-title">Soumettre</h2>
+            <p class="bank-card-sub">Envoyer la dépense pour validation.</p>
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('expenses.submit', expense_id=expense.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="bank-btn bank-btn--primary" type="submit">Soumettre pour validation</button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if current_user.has_permission(P.EXPENSES_VALIDATE) and expense.status != 'validee' %}
+      <div class="bank-card">
+        <div class="bank-card-head">
+          <div>
+            <h2 class="bank-card-title">Valider</h2>
+            <p class="bank-card-sub">Déduit la caisse si un tiroir espèces est ouvert.</p>
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('expenses.validate', expense_id=expense.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="bank-btn bank-btn--primary" type="submit">Valider la dépense</button>
+        </form>
+      </div>
+      <div class="bank-card">
+        <div class="bank-card-head">
+          <div>
+            <h2 class="bank-card-title">Rejeter</h2>
+            <p class="bank-card-sub">Expliquez le motif du rejet.</p>
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('expenses.reject', expense_id=expense.id) }}" class="bank-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="bank-field">
+            <label for="reason">Motif du rejet</label>
+            <input type="text" id="reason" name="reason" required>
+          </div>
+          <button class="bank-btn bank-btn--danger" type="submit">Rejeter</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
   </div>
-  {% endif %}
 </div>
 {% endblock %}
