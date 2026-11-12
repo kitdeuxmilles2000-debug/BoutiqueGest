@@ -68,8 +68,8 @@
       <option value="{{ u.id }}">{{ u.label }} ({{ u.code }})</option>
       {% endfor %}
     </select>
-    <input type="text" name="factor" placeholder="Facteur (ex. 0.2)" value="1" style="width:180px;padding:10px;border:1px solid var(--line);border-radius:10px">
-    <input type="text" name="prix_vente" placeholder="Prix de vente" style="width:150px;padding:10px;border:1px solid var(--line);border-radius:10px">
+    <input type="text" name="factor" placeholder="Facteur (ex. 0.2)" value="1" style="width:180px;max-width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">
+    <input type="text" name="prix_vente" placeholder="Prix de vente" style="width:150px;max-width:100%;padding:10px;border:1px solid var(--line);border-radius:10px">
     <select name="currency" style="padding:10px;border:1px solid var(--line);border-radius:10px">
       {% for cur in currencies %}<option value="{{ cur }}" {{ 'selected' if product.currency == cur }}>{{ cur }}</option>{% endfor %}
     </select>

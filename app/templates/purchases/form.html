@@ -17,12 +17,14 @@
   <div class="purchase-layout">
     <div class="card">
       <h2>Articles command&eacute;s</h2>
-      <table class="table line-table">
-        <thead>
-          <tr><th>Produit</th><th>Unit&eacute;</th><th>Quantit&eacute;</th><th>Prix unitaire</th><th>Total</th><th></th></tr>
-        </thead>
-        <tbody id="linesBody"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table line-table">
+          <thead>
+            <tr><th>Produit</th><th>Unit&eacute;</th><th>Quantit&eacute;</th><th>Prix unitaire</th><th>Total</th><th></th></tr>
+          </thead>
+          <tbody id="linesBody"></tbody>
+        </table>
+      </div>
       <div class="row mt-16">
         <button type="button" class="btn ghost sm" onclick="addLine()">+ Ajouter une ligne</button>
       </div>

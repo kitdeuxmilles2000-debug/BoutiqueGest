@@ -46,8 +46,8 @@
   <form method="post" action="{{ action }}" onsubmit="return confirm({{ confirm_text | tojson }})"
         style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="password" name="owner_password" required placeholder="Mot de passe admin" autocomplete="new-password" style="width:170px">
-    <input type="text" name="reason" placeholder="Motif (facultatif)" style="width:170px">
+    <input type="password" name="owner_password" required placeholder="Mot de passe admin" autocomplete="new-password" style="width:170px;max-width:100%">
+    <input type="text" name="reason" placeholder="Motif (facultatif)" style="width:170px;max-width:100%">
     <button type="submit" class="btn danger sm">Confirmer</button>
   </form>
 </details>

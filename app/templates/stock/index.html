@@ -90,7 +90,7 @@
     {% if current_user.has_permission(P.STOCK_MANAGE) %}
     <details class="stock-refresh" style="display:inline-block">
       <summary class="btn ghost sm">Actualiser les stocks</summary>
-      <form method="post" action="{{ url_for('stock.refresh_stock') }}" class="card" style="width:340px;margin-top:8px;text-align:left">
+      <form method="post" action="{{ url_for('stock.refresh_stock') }}" class="card" style="width:min(340px,100%);margin-top:8px;text-align:left">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <p class="sub" style="margin-top:0">Recalcule les quantités depuis les mouvements de stock. Les produits sans mouvement sont conservés.</p>
         <div class="field">

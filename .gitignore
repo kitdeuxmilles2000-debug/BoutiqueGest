@@ -23,6 +23,8 @@ instance/
 # Migrations de sauvegarde locales
 backups/
 PAQUET_MAJ_CLIENT*/
+MISE_A_JOUR_BoutiqueGest_*/
+MISE_A_JOUR_BoutiqueGest_*.zip
 
 # Logs
 *.log

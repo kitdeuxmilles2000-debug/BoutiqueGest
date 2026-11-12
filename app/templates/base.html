@@ -6,11 +6,13 @@
   <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/banking.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
 <div class="app-shell">
   <aside class="sidebar" id="sidebar">
+    <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Fermer le menu">✕</button>
     <div class="brand">Boutique<span class="dot">Gest</span></div>
     <nav class="nav">
       <div class="nav-group">Exploitation</div>
@@ -136,11 +138,12 @@
       {{ app_name }} v{{ app_version }}
     </div>
   </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
   <div class="main">
     <header class="topbar" style="top: auto;">
       <div class="row" style="gap:14px">
-        <button class="btn ghost sm" onclick="document.getElementById('sidebar').classList.toggle('open')" style="display:none" id="menuBtn">☰</button>
+        <button class="btn ghost sm menu-btn" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu" id="menuBtn">☰</button>
         <h1>{% block heading %}{{ app_name }}{% endblock %}</h1>
         {% if current_user.is_authenticated %}
         <span class="sys-conn on" id="sysConn">En ligne</span>
@@ -173,7 +176,7 @@
           {% if not cloud_read_only and current_user.has_permission(P.SYNC_MANAGE) and config.get('SQLALCHEMY_DATABASE_URI', '').startswith('sqlite:') %}
           <form method="post" action="{{ url_for('admin.sync_process') }}" style="margin:0" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Synchronisation…';">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn ghost sm" title="{% if github_sync_enabled %}Synchroniser les données métier avec GitHub et Render{% else %}Envoyer les données locales vers l’application web{% endif %}">🔁 Synchroniser{% if github_sync_enabled %} GitHub{% endif %}</button>
+            <button type="submit" class="btn ghost sm" title="{% if github_sync_enabled %}Synchroniser les données métier avec GitHub et Render{% else %}Envoyer les données locales vers l’application web{% endif %}"><span class="sync-ico">🔁</span><span class="sync-label">Synchroniser{% if github_sync_enabled %} GitHub{% endif %}</span></button>
           </form>
           {% endif %}
           {% if github_sync_enabled and github_sync_error %}
@@ -217,11 +220,37 @@
 </div>
 <script>
   (function () {
+    var sidebar = document.getElementById('sidebar');
     var btn = document.getElementById('menuBtn');
-    if (btn && window.innerWidth <= 860) { btn.style.display = 'inline-flex'; }
-    window.addEventListener('resize', function () {
-      if (btn) { btn.style.display = window.innerWidth <= 860 ? 'inline-flex' : 'none'; }
+    var backdrop = document.getElementById('sidebarBackdrop');
+    var closeBtn = document.getElementById('sidebarClose');
+    if (!sidebar) return;
+
+    function isMobile() { return window.innerWidth <= 860; }
+    function setOpen(open) {
+      sidebar.classList.toggle('open', open);
+      if (backdrop) backdrop.classList.toggle('show', open);
+      document.body.classList.toggle('nav-open', open);
+      if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    if (btn) {
+      btn.addEventListener('click', function () {
+        setOpen(!sidebar.classList.contains('open'));
+      });
+    }
+    if (backdrop) backdrop.addEventListener('click', function () { setOpen(false); });
+    if (closeBtn) closeBtn.addEventListener('click', function () { setOpen(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') setOpen(false);
     });
+    sidebar.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', function () { if (isMobile()) setOpen(false); });
+    });
+    window.addEventListener('resize', function () {
+      if (!isMobile()) setOpen(false);
+    });
+    setOpen(false);
   })();
 </script>
 <script src="{{ url_for('static', filename='js/form-recovery.js') }}"></script>

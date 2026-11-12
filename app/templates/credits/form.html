@@ -51,7 +51,7 @@ function addRow() {
   div.className = 'row';
   div.style.marginBottom = '8px';
   div.innerHTML = '<input type="date" name="inst_due" style="padding:8px;border:1px solid var(--line);border-radius:8px">'
-    + '<input type="text" name="inst_amount" placeholder="Montant" style="padding:8px;border:1px solid var(--line);border-radius:8px;width:140px">'
+    + '<input type="text" name="inst_amount" placeholder="Montant" style="padding:8px;border:1px solid var(--line);border-radius:8px;width:140px;max-width:100%">'
     + '<button type="button" class="qbtn" onclick="this.parentNode.remove()">✕</button>';
   wrap.appendChild(div);
 }

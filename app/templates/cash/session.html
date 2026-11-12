@@ -236,7 +236,7 @@
               {% if can_correct and not m.is_reversed %}
               <details class="bank-details">
                 <summary>Corriger</summary>
-                <div class="bank-correction" style="text-align:left;min-width:280px">
+                <div class="bank-correction" style="text-align:left;min-width:0">
                   <form method="post" action="{{ url_for('cash.movement_correct', session_id=session.id, movement_id=m.id) }}" class="bank-form bank-form--2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     {% if m.is_manual %}

@@ -46,6 +46,17 @@
   .shared-unit-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 12px; margin-top: 10px; }
   .shared-unit-grid .field { margin: 0; }
   @media (max-width: 700px) { .sale-unit-row { grid-template-columns: repeat(2, minmax(0,1fr)); } .sale-unit-row .sale-unit-actions { grid-column: 1 / -1; } }
+  @media (max-width: 640px) {
+    .prod-form,
+    .product-details-grid,
+    .split-body,
+    .shared-unit-grid,
+    .prod-preview .kpi-row { grid-template-columns: minmax(0, 1fr); }
+    .sale-unit-row { grid-template-columns: minmax(0, 1fr); }
+    .sale-unit-row .sale-unit-actions { grid-column: 1 / -1; }
+    .prod-preview { position: static; }
+    .prod-form input, .prod-form select { font-size: 16px; }
+  }
 </style>
 
 <div class="prod-layout">

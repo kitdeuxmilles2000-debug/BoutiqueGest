@@ -93,7 +93,7 @@
             <form method="post" action="{{ url_for('admin.history_restore', filename=s.filename) }}" style="margin:0" onsubmit="return confirm('Restaurer cet instantané ? Action critique.');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="owner_password" class="owner_pw_restore" required>
-              <input type="text" name="reason" class="input" placeholder="Motif de restauration (obligatoire)" required style="min-width:200px">
+              <input type="text" name="reason" class="input" placeholder="Motif de restauration (obligatoire)" required style="min-width:200px;max-width:100%">
               <button type="button" class="btn danger sm" onclick="fillOwnerAndSubmit(this.form)">Restaurer</button>
             </form>
           </td>

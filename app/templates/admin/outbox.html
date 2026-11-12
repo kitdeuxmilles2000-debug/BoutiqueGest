@@ -110,7 +110,7 @@
     <form method="post" action="{{ url_for('admin.outbox_test_email') }}" class="row" style="gap:8px">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="email" name="to_address" value="{{ report_to or '' }}" placeholder="Adresse de test"
-             autocomplete="off" style="width:230px">
+             autocomplete="off" style="width:230px;max-width:100%">
       <button class="btn ghost" type="submit">Envoyer un e-mail de test</button>
     </form>
     <span class="mail-note">Le test nécessite un serveur configuré et enregistré.</span>

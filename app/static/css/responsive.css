@@ -1,0 +1,225 @@
+/* BoutiqueGest - couche responsive globale.
+   Objectif : sur petits ecrans (telephone, tablette, mini-PC), rien ne doit
+   deborder, se superposer ou forcer un zoom. Cette feuille est chargee apres
+   app.css et banking.css afin de neutraliser les largeurs fixes residuelles. */
+
+/* ------------------------------------------------------------ Garde-fous */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  /* Empeche un debordement horizontal accidentel de la page entiere.
+     Les tableaux et zones larges gerent leur propre defilement. */
+  overflow-x: hidden;
+}
+img, video, canvas, iframe, svg { max-width: 100%; }
+.main, .content, .card, .field, .bank-field, .bank-card { min-width: 0; }
+pre, code, .code { overflow-wrap: anywhere; }
+input, select, textarea, button { max-width: 100%; }
+.table-wrap, .bank-table-wrap {
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ------------------------------------------------------------ Menu mobile */
+.menu-btn { display: none; }
+.sidebar-close { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 860px) {
+  .menu-btn { display: inline-flex; }
+
+  .sidebar {
+    width: min(300px, 86vw);
+    height: 100vh;
+    height: 100dvh;
+    z-index: 70;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .45);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .sidebar-close {
+    display: inline-flex;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, .25);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .10);
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .sidebar-close:hover { background: rgba(255, 255, 255, .20); }
+
+  .sidebar-backdrop.show {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: rgba(15, 23, 42, .48);
+    -webkit-backdrop-filter: blur(1px);
+    backdrop-filter: blur(1px);
+  }
+
+  body.nav-open { overflow: hidden; }
+
+  /* Barre superieure : deux rangees compactes, titre tronque proprement.
+     top:0 en !important car le gabarit pose un top:auto en style inline
+     (utile sur grand ecran ou la barre defile avec la page). */
+  .topbar {
+    position: sticky;
+    top: 0 !important;
+    z-index: 40;
+    padding: 8px 10px;
+    gap: 6px 10px;
+  }
+  .topbar > .row:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+    gap: 8px !important;
+  }
+  .topbar > .row:last-child {
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 6px !important;
+  }
+  .topbar h1 {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .topbar .btn.sm { padding: 6px 9px; }
+  .topbar .menu-btn {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    justify-content: center;
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+  .topbar form { margin: 0; }
+  .topbar .who { display: none; }
+
+  .content { padding: 14px 12px 32px; }
+  .grid { gap: 12px; }
+}
+
+@media (max-width: 560px) {
+  .topbar > .row:last-child { justify-content: flex-start; }
+  .topbar .sys-conn { display: none; }
+  /* Boutons compacts : la barre tient sur une seule ligne meme a 320 px. */
+  .topbar .btn.sm { font-size: .74rem; padding: 5px 7px; gap: 4px; }
+  .topbar .notif-bell { width: 34px; height: 34px; }
+}
+
+@media (max-width: 380px) {
+  /* Ecran tres etroit : le bouton de synchronisation garde son icone
+     et son infobulle, sans son libelle, pour rester sur une ligne. */
+  .topbar .sync-label { display: none; }
+  .topbar .btn.sm { padding: 5px 6px; }
+}
+
+/* ------------------------------------------------------------ Cartes / formulaires */
+@media (max-width: 640px) {
+  .content { padding: 12px 10px 30px; }
+  .card { padding: 13px 12px; border-radius: 10px; }
+  .card-head { gap: 8px; padding-bottom: 10px; margin-bottom: 12px; }
+  .toolbar { gap: 6px; }
+  .alerts { margin-bottom: 12px; }
+  .alert { padding: 9px 11px; font-size: .84rem; }
+
+  .form-narrow { max-width: 100%; }
+
+  /* Un seul champ par ligne : plus de colonnes ecrasees. */
+  .modal .modal-body { grid-template-columns: minmax(0, 1fr); }
+  .modal { padding: 8px; }
+  .modal .modal-dialog { width: 100%; max-height: calc(100dvh - 16px); }
+
+  /* 16px evite le zoom automatique des navigateurs mobiles (iOS). */
+  .field input, .field select, .field textarea,
+  .bank-field input, .bank-field select, .bank-field textarea,
+  .input, .modal input, .modal select, .modal textarea,
+  .invoice-form .field input, .invoice-form .field select {
+    font-size: 16px;
+  }
+
+  .kpi .value { font-size: 1.3rem; }
+  .kpi .label { font-size: .72rem; }
+}
+
+/* ------------------------------------------------------------ Tableaux */
+@media (max-width: 640px) {
+  .table-wrap { max-height: 62vh; border-radius: 8px; }
+  table.table { font-size: .8rem; }
+  table.table th, table.table td { padding: 6px 8px; }
+  table.table thead th { font-size: .66rem; }
+}
+
+/* ------------------------------------------------------------ Caisse / Depenses */
+@media (max-width: 640px) {
+  .bank-page .bank-stack { gap: 12px; }
+
+  .bank-hero {
+    padding: 18px 16px;
+    gap: 14px;
+    border-radius: 16px;
+  }
+  .bank-hero-main,
+  .bank-hero-side { min-width: 0; width: 100%; }
+  .bank-hero-side { align-items: flex-start; }
+  .bank-balance-value {
+    font-size: clamp(1.75rem, 9vw, 2.6rem);
+    overflow-wrap: anywhere;
+  }
+  .bank-hero .bank-hero-meta { gap: 6px 12px; font-size: .78rem; }
+
+  .bank-card { padding: 14px 13px; border-radius: 14px; }
+  .bank-card--flush .bank-card-head { padding: 14px 14px 0; }
+  .bank-card-head { gap: 10px; margin-bottom: 12px; }
+  .bank-card-title { font-size: .98rem; }
+
+  .bank-table { font-size: .82rem; }
+  .bank-table thead th { padding: 9px 12px; }
+  .bank-table tbody td { padding: 10px 12px; }
+  .bank-stat-value { font-size: 1.25rem; }
+
+  .bank-form--inline,
+  .bank-form--2 { grid-template-columns: minmax(0, 1fr); }
+  .bank-actions { gap: 6px; }
+  .bank-actions .bank-btn { flex: 1 1 auto; }
+  .bank-alert { font-size: .83rem; padding: 11px 12px; }
+}
+
+@media (max-width: 400px) {
+  .bank-balance-value { font-size: 1.6rem; }
+  .bank-pill { white-space: normal; }
+  .bank-btn { white-space: normal; text-align: center; }
+}
+
+/* ------------------------------------------------------------ Tactile */
+@media (pointer: coarse) {
+  .btn, .bank-btn, .nav a, .notif-bell { min-height: 44px; }
+  .btn.sm, .bank-btn--sm { min-height: 40px; }
+  .btn.btn-icon { width: 44px; height: 44px; }
+  .nav a { padding-top: 10px; padding-bottom: 10px; }
+}
+
+/* ------------------------------------------------------------ Impression */
+@media print {
+  .menu-btn, .sidebar-backdrop, .sidebar-close { display: none !important; }
+}

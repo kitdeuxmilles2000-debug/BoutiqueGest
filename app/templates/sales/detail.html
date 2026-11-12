@@ -24,19 +24,21 @@
     {% else %}<span class="badge gray">{{ labels.get(sale.status, sale.status) }}</span>{% endif %}
   </div>
 
-  <table class="table">
-    <thead><tr><th>Article</th><th>Qte</th><th>P.U.</th><th>Total</th></tr></thead>
-    <tbody>
-      {% for l in sale.lines %}
-      <tr>
-        <td>{{ l.product.name }}<br><code class="pill">{{ l.product.code }}</code> <span class="pill">{{ l.unit.label if l.unit else '' }}</span></td>
-        <td>{{ l.quantity | qty }}</td>
-        <td>{{ l.prix_unitaire | num }}</td>
-        <td>{{ l.line_total | num }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Article</th><th>Qte</th><th>P.U.</th><th>Total</th></tr></thead>
+      <tbody>
+        {% for l in sale.lines %}
+        <tr>
+          <td>{{ l.product.name }}<br><code class="pill">{{ l.product.code }}</code> <span class="pill">{{ l.unit.label if l.unit else '' }}</span></td>
+          <td>{{ l.quantity | qty }}</td>
+          <td>{{ l.prix_unitaire | num }}</td>
+          <td>{{ l.line_total | num }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <div class="mt-16">
     <div class="tot"><span>Sous-total</span><span>{{ (sale.montant_total + sale.remise) | num }} {{ sale.currency }}</span></div>
